@@ -1,0 +1,290 @@
+.teamContainer {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.headerRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 40px;
+}
+
+.title {
+    font-family: var(--font-playfair);
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+}
+
+.subtitle {
+    font-size: 15px;
+    color: var(--text-secondary);
+}
+
+.inviteBtn {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.inviteBtn:hover {
+    transform: translateY(-2px);
+    opacity: 0.9;
+}
+
+.gridContainer {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    min-height: 400px;
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 400px;
+    color: var(--text-secondary);
+    gap: 16px;
+    font-size: 15px;
+}
+
+/* Metro Table */
+.tableWrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.teamTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.teamTable th {
+    text-align: left;
+    padding: 20px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.teamTable td {
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    vertical-align: middle;
+}
+
+.userCell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.avatarMini {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: var(--accent-blue);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-playfair);
+}
+
+.roleCell {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.badge {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.fullBadge {
+    background: rgba(10, 88, 202, 0.1);
+    color: var(--accent-blue);
+}
+
+.restrictedBadge {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+}
+
+.statusActive {
+    font-size: 13px;
+    font-weight: 500;
+    color: #10b981;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.statusActive::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+}
+
+/* Modal Overlay */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modalContent {
+    background: var(--bg-primary);
+    width: 100%;
+    max-width: 480px;
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--border-color);
+}
+
+.modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.modalHeader h2 {
+    font-family: var(--font-playfair);
+    font-size: 24px;
+    color: var(--text-primary);
+}
+
+.closeBtn {
+    color: var(--text-secondary);
+    transition: color 0.2s;
+}
+
+.closeBtn:hover {
+    color: var(--text-primary);
+}
+
+.inviteForm {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inputGroup label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.iconInput {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.iconInput svg {
+    position: absolute;
+    left: 16px;
+    color: var(--text-secondary);
+}
+
+.iconInput input,
+.iconInput select,
+.inputGroup select {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    font-family: var(--font-inter);
+    font-size: 15px;
+    color: var(--text-primary);
+    transition: all 0.2s;
+    outline: none;
+    appearance: none;
+}
+
+.iconInput input {
+    padding-left: 48px;
+}
+
+.iconInput select {
+    padding-left: 48px;
+}
+
+.iconInput input:focus,
+.iconInput select:focus,
+.inputGroup select:focus {
+    background: var(--bg-primary);
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 4px rgba(10, 88, 202, 0.1);
+}
+
+.submitBtn {
+    background: var(--accent-blue);
+    color: white;
+    padding: 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    margin-top: 8px;
+    transition: background 0.2s;
+}
+
+.submitBtn:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.submitBtn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.statusBox {
+    padding: 12px;
+    background: #eef2ff;
+    color: #4f46e5;
+    border-radius: 8px;
+    font-size: 13px;
+    text-align: center;
+    font-weight: 500;
+}

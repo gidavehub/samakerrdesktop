@@ -1,0 +1,273 @@
+.toolLayout {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--bg-secondary);
+}
+
+.toolSidebar {
+    width: 250px;
+    background-color: var(--bg-primary);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+
+.toolLogo {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 24px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    font-family: var(--font-playfair);
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.toolNav {
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.navItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    background: transparent;
+    cursor: pointer;
+}
+
+.navItem:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.active {
+    background: rgba(10, 88, 202, 0.08);
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+
+.divider {
+    border: 0;
+    height: 1px;
+    background: var(--border-color);
+    margin: 16px 0;
+}
+
+.backBtn {
+    padding: 12px 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.backBtn:hover {
+    color: var(--text-primary);
+}
+
+.toolMain {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.topHeader {
+    height: 80px;
+    padding: 0 40px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.searchBar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-secondary);
+    padding: 12px 16px;
+    border-radius: 8px;
+    width: 400px;
+}
+
+.searchBar input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    outline: none;
+    font-family: var(--font-inter);
+    font-size: 14px;
+}
+
+.primaryBtn {
+    background: var(--accent-blue);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    cursor: pointer;
+}
+
+.primaryBtn:hover {
+    background: var(--accent-hover);
+}
+
+.contentWrap {
+    padding: 40px;
+    flex: 1;
+}
+
+.pageTitle {
+    font-family: var(--font-playfair);
+    font-size: 32px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin-bottom: 40px;
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    text-align: center;
+}
+
+.emptyImg {
+    border-radius: 16px;
+    margin-bottom: 32px;
+    opacity: 0.8;
+    object-fit: cover;
+}
+
+.emptyState h3 {
+    font-size: 20px;
+    font-family: var(--font-playfair);
+    margin-bottom: 8px;
+}
+
+.emptyState p {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+
+/* Print Specific Layouts */
+.printOnlyContainer {
+    display: none;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .printOnlyContainer,
+    .printOnlyContainer * {
+        visibility: visible;
+    }
+
+    .printOnlyContainer {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+    }
+
+    .printPage {
+        padding: 40px;
+        text-align: center;
+        font-family: inherit;
+    }
+
+    .printLogo {
+        max-height: 80px;
+        max-width: 300px;
+        margin-bottom: 30px;
+    }
+
+    .printHeader {
+        font-size: 36px;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .printAddress {
+        font-size: 20px;
+        color: #4a4a4a;
+        margin-bottom: 60px;
+    }
+
+    .printQrWrapper {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 60px;
+    }
+
+    .printQr {
+        padding: 20px;
+        border: 2px solid rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+    }
+
+    .printInstructions {
+        text-align: left;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 30px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+    }
+
+    .printInstructions h2 {
+        font-size: 22px;
+        margin-bottom: 20px;
+    }
+
+    .printInstructions ol {
+        font-size: 16px;
+        line-height: 1.8;
+        color: #343a40;
+        margin-left: 20px;
+        margin-bottom: 20px;
+    }
+
+    .printInstructions p {
+        font-size: 15px;
+        color: #6c757d;
+        font-style: italic;
+    }
+
+    .printFooter {
+        margin-top: 80px;
+        color: white;
+        padding: 15px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 6px;
+    }
+}
