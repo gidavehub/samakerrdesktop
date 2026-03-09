@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Building2, Users } from 'lucide-react';
+import { ArrowRight, Building2, Users, DollarSign, Search } from 'lucide-react';
 import gsap from 'gsap';
 
 const tools = [
@@ -12,7 +12,7 @@ const tools = [
         title: 'Property Management Ledger',
         description: 'Manage assets, track unit economics, and issue connecting QR codes to new tenants across your properties.',
         icon: Building2,
-        route: '/ledger',
+        route: '/portal/ledger',
         image: '/ledger-mastery.png',
         color: '#0A58CA'
     },
@@ -21,13 +21,29 @@ const tools = [
         title: 'Client Relations & Requests',
         description: 'Handle tenant utility bills, maintenance tickets, and construction updates centrally from one hub.',
         icon: Users,
-        route: '/crm',
+        route: '/portal/crm',
         image: '/client-harmony.png',
         color: '#10b981'
+    },
+    {
+        id: 'finances',
+        title: 'Financial Control Center',
+        description: 'Track rent payments, monitor utility expenses, manage billing cycles, and generate financial reports for all your properties.',
+        icon: DollarSign,
+        route: '/portal/finances',
+        image: '/finance-freedom.png',
+        color: '#0891b2'
     }
 ];
 
 export default function PortalHome() {
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredTools = tools.filter(t =>
+        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     useEffect(() => {
         gsap.fromTo('.metro-card',
             { opacity: 0, scale: 0.95 },
@@ -37,13 +53,19 @@ export default function PortalHome() {
 
     return (
         <div className="w-full flex flex-col">
-            <div className="mb-10">
+            <div className="mb-6">
                 <h1 className="text-[32px] font-semibold text-[#1b1b1b] tracking-tight mb-2">Your Licensed Tools</h1>
                 <p className="text-[15px] text-[#605e5c] max-w-[600px]">Sama Kerr Suite unlocks full access. Select an application to open its dashboard.</p>
             </div>
 
+            {/* Search */}
+            <div className="flex items-center gap-2.5 border-b border-[#8a8886] focus-within:border-b-2 focus-within:border-[#0067b8] pb-1.5 pt-2 max-w-[380px] transition-all mb-8">
+                <Search size={16} className="text-[#a19f9d] shrink-0" />
+                <input type="text" placeholder="Search tools..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                    className="border-none bg-transparent w-full outline-none text-[15px] text-[#1b1b1b] placeholder:text-[#605e5c] placeholder:font-light" />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {tools.map((tool) => (
+                {filteredTools.map((tool) => (
                     <Link href={tool.route} key={tool.id} className="metro-card bg-white border border-[#e1dfdd] shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 flex flex-col group overflow-hidden min-h-[380px] relative">
                         <div className="h-[180px] w-full relative overflow-hidden shrink-0">
                             <Image src={tool.image} alt={tool.title} fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
@@ -55,7 +77,6 @@ export default function PortalHome() {
                         <div className="p-6 flex flex-col flex-1">
                             <h2 className="text-[18px] font-semibold text-[#1b1b1b] mb-2 leading-tight">{tool.title}</h2>
                             <p className="text-[14px] text-[#605e5c] line-clamp-3 mb-4 flex-1">{tool.description}</p>
-
                             <div className="mt-auto flex items-center justify-between pt-4 border-t border-[#f3f2f1] group-hover:border-[#e1dfdd] transition-colors">
                                 <span className="text-[14px] font-semibold" style={{ color: tool.color }}>Launch Tool</span>
                                 <ArrowRight size={18} className="transform group-hover:translate-x-1 transition-transform" style={{ color: tool.color }} />
