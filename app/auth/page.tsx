@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { ref, get } from 'firebase/database';
-import { auth, database } from '../../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../lib/firebase';
 import { ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -33,7 +33,7 @@ export default function AuthPage() {
             }
 
             // Check if user has completed onboarding
-            const companySnap = await get(ref(database, 'companies/' + userCredential.user.uid));
+            const companySnap = await getDoc(doc(db, 'companies', userCredential.user.uid));
             if (companySnap.exists()) {
                 router.push('/portal');
             } else {
@@ -53,7 +53,7 @@ export default function AuthPage() {
             const result = await signInWithPopup(auth, provider);
 
             // Check if user has completed onboarding
-            const companySnap = await get(ref(database, 'companies/' + result.user.uid));
+            const companySnap = await getDoc(doc(db, 'companies', result.user.uid));
             if (companySnap.exists()) {
                 router.push('/portal');
             } else {

@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, QrCode, X, Printer, Eye, Building2, FileEdit } from 'lucide-react';
+import { Plus, Search, QrCode, X, Eye, Building2, FileEdit } from 'lucide-react';
 import Image from 'next/image';
-import { QRCodeSVG } from 'qrcode.react';
-import { auth, database } from '../../../lib/firebase';
-import { ref, get, push, set, onValue } from 'firebase/database';
+import QRCodeModal from '../../components/QRCodeModal';
+import { auth, db } from '../../../lib/firebase';
+import { doc, getDoc, collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import gsap from 'gsap';
 
@@ -49,8 +49,8 @@ export default function LedgerDashboard() {
         const unsub = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 setCompanyId(user.uid);
-                const snap = await get(ref(database, 'companies/' + user.uid));
-                if (snap.exists()) setCompanyInfo(snap.val());
+                const snap = await getDoc(doc(db, 'companies', user.uid));
+                if (snap.exists()) setCompanyInfo(snap.data());
             }
         });
         return () => unsub();
@@ -58,16 +58,11 @@ export default function LedgerDashboard() {
 
     useEffect(() => {
         if (!companyId) return;
-        const propsRef = ref(database, `properties/${companyId}`);
-        const unsub = onValue(propsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                const list: Property[] = Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val }));
-                list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                setProperties(list);
-            } else {
-                setProperties([]);
-            }
+        const q = query(collection(db, 'properties'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const list: Property[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Property));
+            list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            setProperties(list);
         });
         return () => unsub();
     }, [companyId]);
@@ -88,8 +83,7 @@ export default function LedgerDashboard() {
         if (!companyId || !formData.name.trim() || !formData.address.trim()) return;
         setSaving(true);
         try {
-            const newRef = push(ref(database, `properties/${companyId}`));
-            await set(newRef, { ...formData, createdAt: Date.now() });
+            await addDoc(collection(db, 'properties'), { ...formData, companyId, createdAt: Date.now() });
             setFormData(emptyForm);
             setShowAddModal(false);
         } catch (err) {
@@ -98,8 +92,6 @@ export default function LedgerDashboard() {
             setSaving(false);
         }
     };
-
-    const handlePrint = () => window.print();
 
     const statusConfig: Record<string, { label: string; classes: string }> = {
         planning: { label: 'Planning', classes: 'bg-gray-100 text-gray-600' },
@@ -359,29 +351,11 @@ export default function LedgerDashboard() {
 
             {/* QR Code Modal */}
             {activeProperty && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
-                    <div className="bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-full max-w-[600px] overflow-hidden flex flex-col">
-                        <div className="px-6 py-4 border-b border-[#e1dfdd] flex items-center justify-between bg-[#faf9f8]">
-                            <h2 className="text-lg font-semibold text-[#1b1b1b]">Tenant Setup Profile</h2>
-                            <button className="text-[#605e5c] hover:text-[#1b1b1b] p-1" onClick={() => setActiveProperty(null)}><X size={20} /></button>
-                        </div>
-                        <div className="p-8 flex flex-col items-center">
-                            <div className="w-32 h-32 mb-6">
-                                <QRCodeSVG value={activeProperty.id} size={128} fgColor={companyInfo?.brandColor1 || "#000000"} />
-                            </div>
-                            <h3 className="text-xl font-bold text-[#1b1b1b] mb-1">{activeProperty.name}</h3>
-                            <p className="text-sm text-[#605e5c] mb-2">{activeProperty.address}</p>
-                            <p className="text-sm text-[#605e5c] text-center max-w-[400px] mb-8">Print this setup kit and provide it to your tenant when they move in.</p>
-                            <button
-                                onClick={handlePrint}
-                                className="flex items-center gap-2 px-8 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-105 hover:shadow-md"
-                                style={{ backgroundColor: accentColor }}
-                            >
-                                <Printer size={18} /> Generate Printable PDF
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <QRCodeModal
+                    property={activeProperty}
+                    companyInfo={companyInfo}
+                    onClose={() => setActiveProperty(null)}
+                />
             )}
         </div>
     );

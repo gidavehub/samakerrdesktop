@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, ClipboardList, X, Plus, Home, DollarSign, Calendar, Wrench, Flame, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
-import { auth, database } from '../../../../lib/firebase';
-import { ref, onValue, set } from 'firebase/database';
+import { auth, db } from '../../../../lib/firebase';
+import { doc, collection, query, where, onSnapshot, setDoc, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import gsap from 'gsap';
 
@@ -60,11 +60,9 @@ export default function BillingSetupPage() {
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `properties/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                setProperties(Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val })));
-            }
+        const q = query(collection(db, 'properties'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            setProperties(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Property)));
         });
         return () => unsub();
     }, [companyId]);
@@ -78,9 +76,10 @@ export default function BillingSetupPage() {
     // Load billing config when property is selected
     useEffect(() => {
         if (!selectedProperty || !companyId) return;
-        const unsub = onValue(ref(database, `billing/${companyId}/${selectedProperty.id}`), (snapshot) => {
-            if (snapshot.exists()) {
-                setBillingConfig({ ...emptyBilling, ...snapshot.val() });
+        const q = query(collection(db, 'billing'), where('companyId', '==', companyId), where('propertyId', '==', selectedProperty.id));
+        const unsub = onSnapshot(q, (snapshot) => {
+            if (!snapshot.empty) {
+                setBillingConfig({ ...emptyBilling, ...snapshot.docs[0].data() });
             } else {
                 setBillingConfig(emptyBilling);
             }
@@ -92,7 +91,8 @@ export default function BillingSetupPage() {
         if (!companyId || !selectedProperty) return;
         setSaving(true);
         try {
-            await set(ref(database, `billing/${companyId}/${selectedProperty.id}`), billingConfig);
+            const billingDocId = `${companyId}_${selectedProperty.id}`;
+            await setDoc(doc(db, 'billing', billingDocId), { ...billingConfig, companyId, propertyId: selectedProperty.id });
         } catch (err) {
             console.error('Failed to save billing config:', err);
         } finally {

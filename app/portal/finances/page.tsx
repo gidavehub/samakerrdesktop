@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, DollarSign, TrendingUp, Receipt, Zap, Droplets, Home, X, ArrowUpRight, ArrowDownRight, Calendar, CreditCard, Flame, Wrench, Plus, ClipboardList } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { auth, database } from '../../../lib/firebase';
-import { ref, onValue, push, set, get } from 'firebase/database';
+import { auth, db } from '../../../lib/firebase';
+import { doc, getDoc, collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import gsap from 'gsap';
 
@@ -60,8 +60,8 @@ export default function FinancesDashboard() {
         const unsub = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 setCompanyId(user.uid);
-                const snap = await get(ref(database, 'companies/' + user.uid));
-                if (snap.exists()) setCompanyInfo(snap.val());
+                const snap = await getDoc(doc(db, 'companies', user.uid));
+                if (snap.exists()) setCompanyInfo(snap.data());
             }
         });
         return () => unsub();
@@ -69,39 +69,35 @@ export default function FinancesDashboard() {
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `properties/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                const list: Property[] = Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val }));
-                setProperties(list);
-            } else {
-                setProperties([]);
-            }
+        const q = query(collection(db, 'properties'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const list: Property[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Property));
+            setProperties(list);
         });
         return () => unsub();
     }, [companyId]);
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `billing/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                setBillingMap(snapshot.val() as Record<string, BillingConfig>);
-            }
+        const q = query(collection(db, 'billing'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const map: Record<string, BillingConfig> = {};
+            snapshot.docs.forEach(d => {
+                const data = d.data();
+                if (data.propertyId) map[data.propertyId] = data as BillingConfig;
+            });
+            setBillingMap(map);
         });
         return () => unsub();
     }, [companyId]);
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `transactions/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                const list: Transaction[] = Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val }));
-                list.sort((a, b) => b.date - a.date);
-                setTransactions(list);
-            } else {
-                setTransactions([]);
-            }
+        const q = query(collection(db, 'transactions'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const list: Transaction[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+            list.sort((a, b) => b.date - a.date);
+            setTransactions(list);
         });
         return () => unsub();
     }, [companyId]);
@@ -117,7 +113,8 @@ export default function FinancesDashboard() {
         setSavingTx(true);
         try {
             const propName = properties.find(p => p.id === recordForm.propertyId)?.name || 'Unknown';
-            await push(ref(database, `transactions/${companyId}`), {
+            await addDoc(collection(db, 'transactions'), {
+                companyId,
                 type: recordForm.type,
                 label: recordForm.label,
                 propertyId: recordForm.propertyId,

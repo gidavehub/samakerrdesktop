@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Search, Plus, ArrowUpRight, ArrowDownRight, Download, Home, Zap, Droplets, CreditCard, Wrench, Flame, X, Receipt } from 'lucide-react';
-import { auth, database } from '../../../../lib/firebase';
-import { ref, onValue, push } from 'firebase/database';
+import { auth, db } from '../../../../lib/firebase';
+import { doc, getDoc, collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { get } from 'firebase/database';
 
 interface Property {
     id: string;
@@ -42,8 +41,8 @@ export default function TransactionsPage() {
         const unsub = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 setCompanyId(user.uid);
-                const snap = await get(ref(database, 'companies/' + user.uid));
-                if (snap.exists()) setCompanyInfo(snap.val());
+                const snap = await getDoc(doc(db, 'companies', user.uid));
+                if (snap.exists()) setCompanyInfo(snap.data());
             }
         });
         return () => unsub();
@@ -51,26 +50,20 @@ export default function TransactionsPage() {
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `properties/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                setProperties(Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val })));
-            }
+        const q = query(collection(db, 'properties'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            setProperties(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Property)));
         });
         return () => unsub();
     }, [companyId]);
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `transactions/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                const list: Transaction[] = Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val }));
-                list.sort((a, b) => b.date - a.date);
-                setTransactions(list);
-            } else {
-                setTransactions([]);
-            }
+        const q = query(collection(db, 'transactions'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const list: Transaction[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+            list.sort((a, b) => b.date - a.date);
+            setTransactions(list);
         });
         return () => unsub();
     }, [companyId]);
@@ -80,7 +73,8 @@ export default function TransactionsPage() {
         setSaving(true);
         try {
             const propName = properties.find(p => p.id === recordForm.propertyId)?.name || 'Unknown';
-            await push(ref(database, `transactions/${companyId}`), {
+            await addDoc(collection(db, 'transactions'), {
+                companyId,
                 type: recordForm.type,
                 label: recordForm.label,
                 propertyId: recordForm.propertyId,

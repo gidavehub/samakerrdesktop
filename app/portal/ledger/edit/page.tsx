@@ -8,8 +8,8 @@ import {
     GripVertical,
     ChevronRight
 } from 'lucide-react';
-import { auth, database } from '../../../../lib/firebase';
-import { ref, get, update } from 'firebase/database';
+import { auth, db } from '../../../../lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import gsap from 'gsap';
 import { Suspense } from 'react';
@@ -158,12 +158,12 @@ function PropertyEditorContent() {
             if (user && propertyId) {
                 setCompanyId(user.uid);
                 const [compSnap, propSnap] = await Promise.all([
-                    get(ref(database, 'companies/' + user.uid)),
-                    get(ref(database, `properties/${user.uid}/${propertyId}`)),
+                    getDoc(doc(db, 'companies', user.uid)),
+                    getDoc(doc(db, 'properties', propertyId)),
                 ]);
-                if (compSnap.exists()) setCompanyInfo(compSnap.val());
+                if (compSnap.exists()) setCompanyInfo(compSnap.data());
                 if (propSnap.exists()) {
-                    const data = propSnap.val();
+                    const data = propSnap.data() as PropertyData;
                     setProperty(data);
                     setImages(data.images || []);
                     setProgress(data.constructionProgress ?? (data.completionState === 'completed' ? 100 : data.completionState === 'construction' ? 50 : 15));
@@ -197,7 +197,7 @@ function PropertyEditorContent() {
             if (progress >= 100) state = 'completed';
             else if (progress > 15) state = 'construction';
 
-            await update(ref(database, `properties/${companyId}/${propertyId}`), {
+            await updateDoc(doc(db, 'properties', propertyId), {
                 name: propName,
                 address: propAddress,
                 googlePlusCode: propPlusCode,

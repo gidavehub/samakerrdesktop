@@ -10,9 +10,9 @@ import {
     DollarSign, Receipt, TrendingUp, PieChart,
     ArrowLeft, ClipboardList
 } from 'lucide-react';
-import { auth, database } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { ref, get } from 'firebase/database';
+import { doc, getDoc } from 'firebase/firestore';
 import gsap from 'gsap';
 
 interface ToolConfig {
@@ -84,9 +84,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 setUser(currentUser);
-                const companySnap = await get(ref(database, 'companies/' + currentUser.uid));
+                const companySnap = await getDoc(doc(db, 'companies', currentUser.uid));
                 if (companySnap.exists()) {
-                    setCompany(companySnap.val());
+                    setCompany(companySnap.data());
                 }
             } else {
                 router.push('/auth');

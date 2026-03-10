@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Search, TrendingUp, ArrowUpRight, Home, BarChart3, Calendar } from 'lucide-react';
 import Image from 'next/image';
-import { auth, database } from '../../../../lib/firebase';
-import { ref, onValue } from 'firebase/database';
+import { auth, db } from '../../../../lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 interface Property {
@@ -28,11 +28,9 @@ export default function RevenuePage() {
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `properties/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                setProperties(Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val })));
-            }
+        const q = query(collection(db, 'properties'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            setProperties(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Property)));
         });
         return () => unsub();
     }, [companyId]);

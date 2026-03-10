@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Activity, MessageSquare, Clock, AlertTriangle, CheckCircle2, Wrench } from 'lucide-react';
 import Image from 'next/image';
-import { auth, database } from '../../../lib/firebase';
-import { ref, onValue, get } from 'firebase/database';
+import { auth, db } from '../../../lib/firebase';
+import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import gsap from 'gsap';
 
@@ -45,8 +45,8 @@ export default function CRMDashboard() {
         const unsub = onAuthStateChanged(auth, async (user) => {
             if (user) {
                 setCompanyId(user.uid);
-                const snap = await get(ref(database, 'companies/' + user.uid));
-                if (snap.exists()) setCompanyInfo(snap.val());
+                const snap = await getDoc(doc(db, 'companies', user.uid));
+                if (snap.exists()) setCompanyInfo(snap.data());
             }
         });
         return () => unsub();
@@ -54,14 +54,10 @@ export default function CRMDashboard() {
 
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `properties/${companyId}`), (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                const list: Property[] = Object.entries(data).map(([key, val]: [string, any]) => ({ id: key, ...val }));
-                setProperties(list);
-            } else {
-                setProperties([]);
-            }
+        const q = query(collection(db, 'properties'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const list: Property[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Property));
+            setProperties(list);
         });
         return () => unsub();
     }, [companyId]);
@@ -69,30 +65,24 @@ export default function CRMDashboard() {
     // Fetch maintenance reports across all properties
     useEffect(() => {
         if (!companyId) return;
-        const unsub = onValue(ref(database, `maintenance/${companyId}`), (snapshot) => {
-            if (!snapshot.exists()) { setRecentReports([]); return; }
-            const data = snapshot.val();
-            const reports: MaintenanceReport[] = [];
-            // data structure: maintenance/companyId/propertyId/reportId
-            for (const [propId, propReports] of Object.entries(data) as [string, any][]) {
-                const prop = properties.find(p => p.id === propId);
-                if (typeof propReports === 'object' && propReports !== null) {
-                    for (const [reportId, reportData] of Object.entries(propReports) as [string, any][]) {
-                        reports.push({
-                            id: reportId,
-                            propertyId: propId,
-                            propertyName: prop?.name || 'Unknown Property',
-                            category: reportData.category || '',
-                            subIssues: reportData.subIssues || [],
-                            urgency: reportData.urgency || 'medium',
-                            description: reportData.description || '',
-                            photoCount: reportData.photoCount || 0,
-                            status: reportData.status || 'pending',
-                            createdAt: reportData.createdAt || 0,
-                        });
-                    }
-                }
-            }
+        const q = query(collection(db, 'maintenance'), where('companyId', '==', companyId));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const reports: MaintenanceReport[] = snapshot.docs.map(d => {
+                const data = d.data();
+                const prop = properties.find(p => p.id === data.propertyId);
+                return {
+                    id: d.id,
+                    propertyId: data.propertyId || '',
+                    propertyName: prop?.name || 'Unknown Property',
+                    category: data.category || '',
+                    subIssues: data.subIssues || [],
+                    urgency: data.urgency || 'medium',
+                    description: data.description || '',
+                    photoCount: data.photoCount || 0,
+                    status: data.status || 'pending',
+                    createdAt: data.createdAt || 0,
+                };
+            });
             reports.sort((a, b) => b.createdAt - a.createdAt);
             setRecentReports(reports);
         });
@@ -200,8 +190,8 @@ export default function CRMDashboard() {
                                                 <tr key={r.id} className="border-b border-[#f3f2f1] hover:bg-[#f3f9fd] transition-colors">
                                                     <td className="py-3.5 px-5">
                                                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${r.status === 'pending' ? 'bg-amber-50 text-amber-600' :
-                                                                r.status === 'in_progress' ? 'bg-blue-50 text-blue-600' :
-                                                                    'bg-emerald-50 text-emerald-600'
+                                                            r.status === 'in_progress' ? 'bg-blue-50 text-blue-600' :
+                                                                'bg-emerald-50 text-emerald-600'
                                                             }`}>
                                                             {r.status === 'pending' ? <AlertTriangle size={12} /> :
                                                                 r.status === 'in_progress' ? <Clock size={12} /> :

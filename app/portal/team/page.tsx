@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Mail, Plus, Shield, User, X } from 'lucide-react';
-import { auth, database } from '../../../lib/firebase';
-import { ref, get, set, push } from 'firebase/database';
+import { auth, db } from '../../../lib/firebase';
+import { doc, getDoc, collection, getDocs, addDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth'; // Using secondary auth instance conceptually
 import gsap from 'gsap';
 
@@ -40,20 +40,17 @@ export default function TeamManagement() {
         const user = auth.currentUser;
         if (!user) return;
 
-        const teamRef = ref(database, `companies/${user.uid}/team`);
-        const companyRef = ref(database, `companies/${user.uid}`);
+        const teamCol = collection(db, 'companies', user.uid, 'team');
+        const compRef = doc(db, 'companies', user.uid);
 
-        const [teamSnap, compSnap] = await Promise.all([get(teamRef), get(companyRef)]);
+        const [teamSnap, compSnap] = await Promise.all([getDocs(teamCol), getDoc(compRef)]);
 
         if (compSnap.exists()) {
-            setCompanyData(compSnap.val());
+            setCompanyData(compSnap.data());
         }
 
-        if (teamSnap.exists()) {
-            const data = teamSnap.val();
-            const parsed = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-            setMembers(parsed);
-        }
+        const parsed = teamSnap.docs.map(d => ({ id: d.id, ...d.data() } as TeamMember));
+        setMembers(parsed);
     };
 
     const generateTempPassword = () => {
@@ -98,9 +95,8 @@ export default function TeamManagement() {
 
             // 2. Save records to DB
             setStatusMsg('Saving team credentials...');
-            const teamRef = ref(database, `companies/${admin.uid}/team`);
-            const newMemberRef = push(teamRef);
-            await set(newMemberRef, {
+            const teamCol = collection(db, 'companies', admin.uid, 'team');
+            await addDoc(teamCol, {
                 email,
                 role,
                 accessLevel: 'Full Access',

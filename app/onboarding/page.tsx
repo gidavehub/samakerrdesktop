@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { onAuthStateChanged, updateProfile } from 'firebase/auth';
-import { ref, set } from 'firebase/database';
-import { auth, database } from '../../lib/firebase';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../lib/firebase';
 import { ArrowRight, CheckCircle, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -59,7 +59,7 @@ export default function OnboardingPage() {
 
             await updateProfile(user, { displayName: name, photoURL: photoUrl });
 
-            await set(ref(database, 'companies/' + user.uid), {
+            await setDoc(doc(db, 'companies', user.uid), {
                 ownerName: name,
                 ownerEmail: user.email,
                 ownerPhoto: photoUrl,
@@ -84,7 +84,7 @@ export default function OnboardingPage() {
         // Mock payment verification & upgrade
         setTimeout(async () => {
             if (user) {
-                await set(ref(database, `companies/${user.uid}/plan`), 'Sama Kerr Suite');
+                await updateDoc(doc(db, 'companies', user.uid), { plan: 'Sama Kerr Suite' });
             }
             router.push('/portal');
         }, 1500);

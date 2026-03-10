@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, database } from '../../lib/firebase';
-import { ref, push, set, onValue } from 'firebase/database';
+import { auth, db } from '../../lib/firebase';
+import { collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { QRCodeSVG } from 'qrcode.react';
 import styles from './page.module.css';
@@ -33,18 +33,10 @@ export default function Dashboard() {
     }, [router]);
 
     const loadHomes = (userId: string) => {
-        const homesRef = ref(database, `users/${userId}/homes`);
-        onValue(homesRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                const homesList = Object.keys(data).map(key => ({
-                    id: key,
-                    ...data[key]
-                }));
-                setHomes(homesList);
-            } else {
-                setHomes([]);
-            }
+        const q = query(collection(db, 'userHomes'), where('userId', '==', userId));
+        onSnapshot(q, (snapshot) => {
+            const homesList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setHomes(homesList);
             setLoading(false);
         });
     };
@@ -62,8 +54,7 @@ export default function Dashboard() {
             createdAt: new Date().toISOString()
         };
 
-        const homeRef = ref(database, `users/${user.uid}/homes/${newHomeId}`);
-        await set(homeRef, homeData);
+        await addDoc(collection(db, 'userHomes'), { ...homeData, userId: user.uid });
 
         setHomeName('');
         setOwnerName('');
