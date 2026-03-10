@@ -321,7 +321,7 @@ export default function QRCodeModal({ property, companyInfo, onClose }: QRCodeMo
             const templateStyles = getTemplatePDFStyles(selectedTemplate.id, brandColor1, brandColor2);
 
             const html = `
-            <div class="page" style="width:210mm;min-height:297mm;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Inter',-apple-system,Segoe UI,sans-serif;background:${isDark ? '#0f172a' : '#ffffff'};color:${isDark ? '#e2e8f0' : '#1a1a2e'};">
+            <div class="page" style="width:210mm;height:297mm;max-height:297mm;position:relative;overflow:hidden;display:flex;flex-direction:column;font-family:'Inter',-apple-system,Segoe UI,sans-serif;background:${isDark ? '#0f172a' : '#ffffff'};color:${isDark ? '#e2e8f0' : '#1a1a2e'};">
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
                     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -334,61 +334,75 @@ export default function QRCodeModal({ property, companyInfo, onClose }: QRCodeMo
                 </div>
 
                 <!-- Header -->
-                <div class="header-strip" style="position:relative;z-index:2;padding:28px 48px;display:flex;align-items:center;justify-content:space-between;">
-                    <div style="display:flex;align-items:center;gap:14px;">
-                        ${companyLogoUrl ? `<img src="${companyLogoUrl}" style="width:48px;height:48px;border-radius:12px;object-fit:contain;background:rgba(255,255,255,0.2);padding:6px;border:2px solid rgba(255,255,255,0.3);" />` : ''}
-                        <span style="font-size:24px;font-weight:800;color:white;letter-spacing:-0.5px;">${sName}</span>
+                <div class="header-strip" style="position:relative;z-index:2;padding:22px 40px 18px;overflow:hidden;">
+                    <!-- Decorative background orbs -->
+                    <div style="position:absolute;top:-60px;right:-40px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.12),transparent 70%);pointer-events:none;"></div>
+                    <div style="position:absolute;bottom:-40px;left:-30px;width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.08),transparent 70%);pointer-events:none;"></div>
+                    <!-- Dot pattern overlay -->
+                    <div style="position:absolute;inset:0;opacity:0.04;background-image:radial-gradient(white 1px,transparent 1px);background-size:16px 16px;pointer-events:none;"></div>
+
+                    <div style="position:relative;display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:18px;">
+                            ${companyLogoUrl ? `<div style="width:68px;height:68px;border-radius:16px;background:rgba(255,255,255,0.2);backdrop-filter:blur(12px);border:3px solid rgba(255,255,255,0.35);box-shadow:0 8px 32px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;"><img src="${companyLogoUrl}" style="width:54px;height:54px;object-fit:contain;" /></div>` : ''}
+                            <div>
+                                <div style="font-size:24px;font-weight:900;color:white;letter-spacing:-0.8px;line-height:1.15;text-shadow:0 2px 8px rgba(0,0,0,0.12);">${sName}</div>
+                                <div style="font-size:12px;color:rgba(255,255,255,0.55);font-weight:500;margin-top:3px;">Property QR Code Generator</div>
+                            </div>
+                        </div>
+                        <span style="background:rgba(255,255,255,0.18);color:white;font-size:10px;font-weight:700;padding:8px 18px;border-radius:100px;letter-spacing:1.5px;text-transform:uppercase;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);">✦ Tenant Setup Kit</span>
                     </div>
-                    <span style="background:rgba(255,255,255,0.2);color:white;font-size:11px;font-weight:700;padding:6px 16px;border-radius:100px;letter-spacing:1.5px;text-transform:uppercase;border:1px solid rgba(255,255,255,0.3);">Tenant Setup Kit</span>
+
+                    <!-- Bottom shimmer line -->
+                    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent);"></div>
                 </div>
 
                 <!-- Content -->
-                <div style="position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;padding:60px 48px 40px;">
-                    <div class="welcome" style="text-align:center;margin-bottom:36px;">
-                        <h1 style="font-size:32px;font-weight:800;letter-spacing:-0.8px;margin-bottom:8px;color:${isDark ? '#f1f5f9' : '#111827'};">Welcome to Your New Home</h1>
-                        <p style="font-size:15px;color:${isDark ? '#94a3b8' : '#6b7280'};line-height:1.6;max-width:420px;margin:0 auto;">Scan the QR code below with your phone camera to instantly connect to your property and unlock your smart tenant portal.</p>
+                <div style="position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 48px 16px;">
+                    <div class="welcome" style="text-align:center;margin-bottom:20px;">
+                        <h1 style="font-size:28px;font-weight:800;letter-spacing:-0.8px;margin-bottom:6px;color:${isDark ? '#f1f5f9' : '#111827'};">Welcome to Your New Home</h1>
+                        <p style="font-size:13px;color:${isDark ? '#94a3b8' : '#6b7280'};line-height:1.5;max-width:400px;margin:0 auto;">Scan the QR code below with your phone camera to instantly connect to your property and unlock your smart tenant portal.</p>
                     </div>
 
                     <!-- QR Code -->
-                    <div class="qr-box" style="position:relative;padding:28px;border-radius:24px;background:${isDark ? '#1e293b' : '#ffffff'};box-shadow:${isDark ? `0 0 60px ${brandColor1}15, 0 4px 30px rgba(0,0,0,0.4)` : '0 4px 40px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)'};margin-bottom:32px;">
-                        <div style="position:absolute;top:-2px;left:-2px;width:20px;height:20px;border-top:4px solid ${brandColor1};border-left:4px solid ${brandColor1};border-radius:8px 0 0 0;"></div>
-                        <div style="position:absolute;top:-2px;right:-2px;width:20px;height:20px;border-top:4px solid ${brandColor2};border-right:4px solid ${brandColor2};border-radius:0 8px 0 0;"></div>
-                        <div style="position:absolute;bottom:-2px;left:-2px;width:20px;height:20px;border-bottom:4px solid ${brandColor2};border-left:4px solid ${brandColor2};border-radius:0 0 0 8px;"></div>
-                        <div style="position:absolute;bottom:-2px;right:-2px;width:20px;height:20px;border-bottom:4px solid ${brandColor1};border-right:4px solid ${brandColor1};border-radius:0 0 8px 0;"></div>
-                        <img src="${dataUrl}" style="width:280px;height:280px;display:block;" />
+                    <div class="qr-box" style="position:relative;padding:20px;border-radius:20px;background:${isDark ? '#1e293b' : '#ffffff'};box-shadow:${isDark ? `0 0 60px ${brandColor1}15, 0 4px 30px rgba(0,0,0,0.4)` : '0 4px 40px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)'};margin-bottom:18px;">
+                        <div style="position:absolute;top:-2px;left:-2px;width:16px;height:16px;border-top:3px solid ${brandColor1};border-left:3px solid ${brandColor1};border-radius:6px 0 0 0;"></div>
+                        <div style="position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-top:3px solid ${brandColor2};border-right:3px solid ${brandColor2};border-radius:0 6px 0 0;"></div>
+                        <div style="position:absolute;bottom:-2px;left:-2px;width:16px;height:16px;border-bottom:3px solid ${brandColor2};border-left:3px solid ${brandColor2};border-radius:0 0 0 6px;"></div>
+                        <div style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-bottom:3px solid ${brandColor1};border-right:3px solid ${brandColor1};border-radius:0 0 6px 0;"></div>
+                        <img src="${dataUrl}" style="width:230px;height:230px;display:block;" />
                     </div>
 
                     <!-- Property -->
-                    <div style="text-align:center;margin-bottom:40px;">
-                        <div class="prop-name" style="font-size:26px;font-weight:800;color:${isDark ? '#f1f5f9' : '#111827'};margin-bottom:4px;letter-spacing:-0.5px;">${sProp}</div>
-                        <div class="prop-addr" style="font-size:14px;color:${isDark ? '#64748b' : '#9ca3af'};font-weight:500;">${sAddr}</div>
+                    <div style="text-align:center;margin-bottom:16px;">
+                        <div class="prop-name" style="font-size:22px;font-weight:800;color:${isDark ? '#f1f5f9' : '#111827'};margin-bottom:3px;letter-spacing:-0.5px;">${sProp}</div>
+                        <div class="prop-addr" style="font-size:12px;color:${isDark ? '#64748b' : '#9ca3af'};font-weight:500;">${sAddr}</div>
                     </div>
 
                     <!-- Divider -->
-                    <div style="width:80px;height:3px;border-radius:10px;background:linear-gradient(90deg, ${brandColor1}, ${brandColor2});margin:0 auto 24px;"></div>
+                    <div style="width:60px;height:2px;border-radius:10px;background:linear-gradient(90deg, ${brandColor1}, ${brandColor2});margin:0 auto 16px;"></div>
 
                     <!-- Steps -->
-                    <div style="display:flex;gap:20px;width:100%;max-width:520px;margin-bottom:40px;">
-                        <div class="step-card" style="flex:1;text-align:center;padding:20px 16px;border-radius:16px;background:${isDark ? '#1e293b' : '#f9fafb'};border:1px solid ${isDark ? '#334155' : '#f3f4f6'};">
-                            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg, ${brandColor1}, ${brandColor2});color:white;font-size:14px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">1</div>
-                            <div class="step-title" style="font-size:13px;font-weight:700;color:${isDark ? '#e2e8f0' : '#374151'};margin-bottom:4px;">Open Camera</div>
-                            <div class="step-desc" style="font-size:11px;color:${isDark ? '#64748b' : '#9ca3af'};line-height:1.4;">Use your phone's camera or QR scanner app</div>
+                    <div style="display:flex;gap:14px;width:100%;max-width:480px;">
+                        <div class="step-card" style="flex:1;text-align:center;padding:14px 10px;border-radius:12px;background:${isDark ? '#1e293b' : '#f9fafb'};border:1px solid ${isDark ? '#334155' : '#f3f4f6'};">
+                            <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg, ${brandColor1}, ${brandColor2});color:white;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-bottom:6px;">1</div>
+                            <div class="step-title" style="font-size:11px;font-weight:700;color:${isDark ? '#e2e8f0' : '#374151'};margin-bottom:2px;">Open Camera</div>
+                            <div class="step-desc" style="font-size:9px;color:${isDark ? '#64748b' : '#9ca3af'};line-height:1.3;">Use your phone's camera or QR scanner app</div>
                         </div>
-                        <div class="step-card" style="flex:1;text-align:center;padding:20px 16px;border-radius:16px;background:${isDark ? '#1e293b' : '#f9fafb'};border:1px solid ${isDark ? '#334155' : '#f3f4f6'};">
-                            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg, ${brandColor1}, ${brandColor2});color:white;font-size:14px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">2</div>
-                            <div class="step-title" style="font-size:13px;font-weight:700;color:${isDark ? '#e2e8f0' : '#374151'};margin-bottom:4px;">Scan Code</div>
-                            <div class="step-desc" style="font-size:11px;color:${isDark ? '#64748b' : '#9ca3af'};line-height:1.4;">Point camera at the QR code above</div>
+                        <div class="step-card" style="flex:1;text-align:center;padding:14px 10px;border-radius:12px;background:${isDark ? '#1e293b' : '#f9fafb'};border:1px solid ${isDark ? '#334155' : '#f3f4f6'};">
+                            <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg, ${brandColor1}, ${brandColor2});color:white;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-bottom:6px;">2</div>
+                            <div class="step-title" style="font-size:11px;font-weight:700;color:${isDark ? '#e2e8f0' : '#374151'};margin-bottom:2px;">Scan Code</div>
+                            <div class="step-desc" style="font-size:9px;color:${isDark ? '#64748b' : '#9ca3af'};line-height:1.3;">Point camera at the QR code above</div>
                         </div>
-                        <div class="step-card" style="flex:1;text-align:center;padding:20px 16px;border-radius:16px;background:${isDark ? '#1e293b' : '#f9fafb'};border:1px solid ${isDark ? '#334155' : '#f3f4f6'};">
-                            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg, ${brandColor1}, ${brandColor2});color:white;font-size:14px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">3</div>
-                            <div class="step-title" style="font-size:13px;font-weight:700;color:${isDark ? '#e2e8f0' : '#374151'};margin-bottom:4px;">Get Connected</div>
-                            <div class="step-desc" style="font-size:11px;color:${isDark ? '#64748b' : '#9ca3af'};line-height:1.4;">Access your tenant portal instantly</div>
+                        <div class="step-card" style="flex:1;text-align:center;padding:14px 10px;border-radius:12px;background:${isDark ? '#1e293b' : '#f9fafb'};border:1px solid ${isDark ? '#334155' : '#f3f4f6'};">
+                            <div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg, ${brandColor1}, ${brandColor2});color:white;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;margin-bottom:6px;">3</div>
+                            <div class="step-title" style="font-size:11px;font-weight:700;color:${isDark ? '#e2e8f0' : '#374151'};margin-bottom:2px;">Get Connected</div>
+                            <div class="step-desc" style="font-size:9px;color:${isDark ? '#64748b' : '#9ca3af'};line-height:1.3;">Access your tenant portal instantly</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Footer -->
-                <div class="footer-bar" style="position:relative;z-index:2;padding:20px 48px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid ${isDark ? '#1e293b' : '#f3f4f6'};margin-top:auto;">
+                <div class="footer-bar" style="position:relative;z-index:2;padding:12px 40px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid ${isDark ? '#1e293b' : '#f3f4f6'};margin-top:auto;">
                     <span class="footer-left" style="font-size:11px;color:${isDark ? '#475569' : '#d1d5db'};">Generated for ${sProp}</span>
                     <div class="footer-right" style="display:flex;align-items:center;gap:6px;">
                         <span style="font-size:11px;color:${isDark ? '#475569' : '#d1d5db'};">Powered by</span>
@@ -465,30 +479,79 @@ export default function QRCodeModal({ property, companyInfo, onClose }: QRCodeMo
                     className="relative z-10 bg-white w-full max-w-[920px] max-h-[90vh] overflow-y-auto shadow-[0_32px_80px_rgba(0,0,0,0.35)]"
                     style={{ borderRadius: '16px' }}
                 >
-                    {/* Header bar with gradient accent */}
+                    {/* Header bar — premium branded header */}
                     <div
-                        className="relative px-7 py-5 flex items-center justify-between"
+                        className="relative overflow-hidden"
                         style={{
                             background: `linear-gradient(135deg, ${brandColor1}, ${brandColor2})`,
                         }}
                     >
-                        <div className="flex items-center gap-3">
-                            {companyLogoUrl && (
-                                <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center overflow-hidden border border-white/30">
-                                    <img src={companyLogoUrl} alt="Logo" className="w-8 h-8 object-contain" />
+                        {/* Decorative background elements */}
+                        <div className="absolute inset-0 pointer-events-none">
+                            <div className="absolute -top-20 -right-20 w-[300px] h-[300px] rounded-full opacity-[0.08]" style={{ background: 'radial-gradient(circle, white, transparent 70%)' }} />
+                            <div className="absolute -bottom-16 -left-16 w-[200px] h-[200px] rounded-full opacity-[0.06]" style={{ background: 'radial-gradient(circle, white, transparent 70%)' }} />
+                            {/* Subtle dot pattern */}
+                            <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(white 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+                        </div>
+
+                        <div className="relative z-10 px-8 py-6 flex items-center justify-between gap-6">
+                            {/* Left: Logo + Company Info */}
+                            <div className="flex items-center gap-5 min-w-0">
+                                {companyLogoUrl && (
+                                    <div
+                                        className="shrink-0 rounded-2xl flex items-center justify-center overflow-hidden"
+                                        style={{
+                                            width: '64px',
+                                            height: '64px',
+                                            background: 'rgba(255,255,255,0.2)',
+                                            backdropFilter: 'blur(12px)',
+                                            border: '2px solid rgba(255,255,255,0.3)',
+                                            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                                        }}
+                                    >
+                                        <img src={companyLogoUrl} alt="Logo" className="w-[52px] h-[52px] object-contain" />
+                                    </div>
+                                )}
+                                <div className="min-w-0">
+                                    <h2 className="text-[22px] font-extrabold text-white tracking-tight truncate leading-tight drop-shadow-sm">
+                                        {companyName}
+                                    </h2>
+                                    <p className="text-[13px] text-white/60 font-medium mt-1 truncate">
+                                        Property QR Code Generator
+                                    </p>
                                 </div>
-                            )}
-                            <div>
-                                <h2 className="text-[17px] font-bold text-white tracking-tight">{companyName}</h2>
-                                <p className="text-[12px] text-white/70">Tenant Setup Kit</p>
+                            </div>
+
+                            {/* Right: Badge + Close */}
+                            <div className="flex items-center gap-3 shrink-0">
+                                <span
+                                    className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[1.5px] px-4 py-2 rounded-full"
+                                    style={{
+                                        background: 'rgba(255,255,255,0.15)',
+                                        color: 'white',
+                                        border: '1px solid rgba(255,255,255,0.25)',
+                                        backdropFilter: 'blur(8px)',
+                                    }}
+                                >
+                                    <Sparkles size={13} />
+                                    Tenant Setup Kit
+                                </span>
+                                <button
+                                    onClick={onClose}
+                                    className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105"
+                                    style={{
+                                        background: 'rgba(255,255,255,0.15)',
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        backdropFilter: 'blur(8px)',
+                                    }}
+                                >
+                                    <X size={16} className="text-white" />
+                                </button>
                             </div>
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors"
-                        >
-                            <X size={16} className="text-white" />
-                        </button>
+
+                        {/* Bottom edge gradient line */}
+                        <div className="h-[2px]" style={{ background: `linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)` }} />
                     </div>
 
                     {/* Content — Two-panel layout */}
