@@ -1,0 +1,56 @@
+[dotenv@17.3.1] injecting env (9) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+
+╔══════════════════════════════════════════════════╗
+║   SAMA KERR — GCP SERVICES VERIFICATION          ║
+╚══════════════════════════════════════════════════╝
+
+──────────────────────────────────────────────────
+  1. GCP Credential Parsing
+──────────────────────────────────────────────────
+  ✓ Project ID: outlaw-490315
+  ✓ Client Email: sama-kerr@outlaw-490315.iam.gserviceaccount.com
+  ✓ Private Key: starts with "-----BEGIN" = true
+
+──────────────────────────────────────────────────
+  2. Gemini 3 Flash Preview (Text Generation)
+──────────────────────────────────────────────────
+  … SDK initialized. Sending test prompt to gemini-3-flash-preview at location=global...
+  ✓ Response: "GEMINI_OK"
+
+──────────────────────────────────────────────────
+  3. Imagen 3 (Image Generation)
+──────────────────────────────────────────────────
+  … Generating a tiny test image with imagen-3.0-generate-002...
+  ✓ Image generated successfully (base64 length: 54652 chars)
+
+──────────────────────────────────────────────────
+  4. Google Cloud Storage
+──────────────────────────────────────────────────
+  … Checking bucket "outlaw-490315-media" exists...
+  ✓ Bucket exists
+  … Writing test file...
+  ✓ File written to _test/gcp-verify.txt
+  ✓ File made public: https://storage.googleapis.com/outlaw-490315-media/_test/gcp-verify.txt
+  ✓ Test file cleaned up
+
+──────────────────────────────────────────────────
+  5. Firebase RTDB REST API
+──────────────────────────────────────────────────
+  … Testing write to https://red-girder-461916-a1-default-rtdb.firebaseio.com/_test/gcp-verify.json ...
+  ✓ RTDB write succeeded
+  ✓ RTDB read back: {"test":true,"timestamp":"2026-03-20T09:18:03.608Z"}
+  ✓ Test data cleaned up
+
+══════════════════════════════════════════════════
+  RESULTS SUMMARY
+══════════════════════════════════════════════════
+  ✓ PASS: Credential Parsing
+  ✓ PASS: Gemini 3 Flash Preview
+  ✓ PASS: Imagen 3
+  ✓ PASS: Google Cloud Storage
+  ✓ PASS: Firebase RTDB REST API
+──────────────────────────────────────────────────
+  5 passed, 0 failed
+
+  🎉 ALL SERVICES VERIFIED — Pipeline is ready!
+

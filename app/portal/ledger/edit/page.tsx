@@ -14,44 +14,17 @@ import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { ref as rtdbRef, onValue, off, set } from 'firebase/database';
 import { onAuthStateChanged } from 'firebase/auth';
 import gsap from 'gsap';
-import { Suspense, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { useTexture } from '@react-three/drei';
-import * as THREE from 'three';
+import { Suspense } from 'react';
+import dynamic from 'next/dynamic';
 
-// --- 3D Parallax Viewer Component ---
-function ParallaxImage({ url }: { url: string }) {
-    const texture = useTexture(url);
-    const meshRef = useRef<THREE.Mesh>(null);
-    
-    // Calculate aspect ratio
-    const aspect = texture.image ? texture.image.width / texture.image.height : 16/9;
+// Grammar of Shelter Engine — dynamically imported (uses Three.js which needs browser)
+const FirstPersonViewer = dynamic(
+    () => import('../../../components/grammar-of-shelter/viewer/FirstPersonViewer'),
+    { ssr: false, loading: () => <div className="w-full h-full bg-[#1a1a1a] flex items-center justify-center"><div className="w-8 h-8 border-[3px] border-white/20 border-t-white rounded-full animate-spin" /></div> }
+);
 
-    useFrame((state) => {
-        if (!meshRef.current) return;
-        // Subtle mouse parallax effect (tilt based on pointer position)
-        const targetX = (state.pointer.x * Math.PI) / 20;
-        const targetY = (state.pointer.y * Math.PI) / 20;
-        
-        // Smooth interpolation
-        meshRef.current.rotation.y += 0.05 * (targetX - meshRef.current.rotation.y);
-        meshRef.current.rotation.x += 0.05 * (-targetY - meshRef.current.rotation.x);
-    });
-
-    return (
-        <mesh ref={meshRef}>
-            <planeGeometry args={[10 * aspect, 10, 128, 128]} />
-            <meshStandardMaterial 
-                map={texture} 
-                displacementMap={texture} // Using the image itself as a crude depth map for the "bump" effect
-                displacementScale={0.3}
-                roughness={0.8}
-                metalness={0.2}
-                side={THREE.DoubleSide}
-            />
-        </mesh>
-    );
-}
+// --- 3D Parallax Viewer REMOVED ---
+// Replaced by the Grammar of Shelter Engine (first-person 3D walkthrough)
 
 interface PropertyData {
     name: string;
@@ -818,24 +791,18 @@ function PropertyEditorContent() {
                                     </div>
                                 )}
 
-                                {/* 3. 3D Canvas Box */}
-                                {isometric25DUrl && (
+                                {/* 3. Grammar of Shelter — 3D Walkthrough */}
+                                {rooms.length > 0 && (
                                     <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
                                         <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
                                             <Cuboid size={18} className="text-[#0A58CA]" /> 
-                                            Interactive 3D Canvas (Parallax)
+                                            3D Walkthrough — Grammar of Shelter Engine
                                         </h3>
-                                        <div className="w-full aspect-[16/9] bg-[#e1dfdd] border border-[#e1dfdd] overflow-hidden relative group cursor-move">
-                                            <Canvas camera={{ position: [0, 0, 7.5], fov: 45 }}>
-                                                <ambientLight intensity={0.5} />
-                                                <directionalLight position={[10, 10, 5]} intensity={1} />
-                                                <Suspense fallback={null}>
-                                                    <ParallaxImage url={isometric25DUrl} />
-                                                </Suspense>
-                                            </Canvas>
-                                            <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white text-[11px] font-medium pointer-events-none">
-                                                <Cuboid size={12} /> Drag to explore 3D
-                                            </div>
+                                        <div className="w-full aspect-[16/9] overflow-hidden relative rounded-lg">
+                                            <FirstPersonViewer
+                                                rooms={rooms}
+                                                className="w-full h-full"
+                                            />
                                         </div>
                                     </div>
                                 )}
