@@ -5,14 +5,53 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
     ArrowLeft, Upload, X, Trash2, Image as ImageIcon,
     HardHat, CheckCircle2, Clock, Save, Cuboid, FileText,
-    GripVertical,
+    GripVertical, Wand2, Settings2, Smartphone,
     ChevronRight
 } from 'lucide-react';
-import { auth, db } from '../../../../lib/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { QRCodeSVG } from 'qrcode.react';
+import { auth, db, rtdb } from '../../../../lib/firebase';
+import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { ref as rtdbRef, onValue, off, set } from 'firebase/database';
 import { onAuthStateChanged } from 'firebase/auth';
 import gsap from 'gsap';
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { useTexture } from '@react-three/drei';
+import * as THREE from 'three';
+
+// --- 3D Parallax Viewer Component ---
+function ParallaxImage({ url }: { url: string }) {
+    const texture = useTexture(url);
+    const meshRef = useRef<THREE.Mesh>(null);
+    
+    // Calculate aspect ratio
+    const aspect = texture.image ? texture.image.width / texture.image.height : 16/9;
+
+    useFrame((state) => {
+        if (!meshRef.current) return;
+        // Subtle mouse parallax effect (tilt based on pointer position)
+        const targetX = (state.pointer.x * Math.PI) / 20;
+        const targetY = (state.pointer.y * Math.PI) / 20;
+        
+        // Smooth interpolation
+        meshRef.current.rotation.y += 0.05 * (targetX - meshRef.current.rotation.y);
+        meshRef.current.rotation.x += 0.05 * (-targetY - meshRef.current.rotation.x);
+    });
+
+    return (
+        <mesh ref={meshRef}>
+            <planeGeometry args={[10 * aspect, 10, 128, 128]} />
+            <meshStandardMaterial 
+                map={texture} 
+                displacementMap={texture} // Using the image itself as a crude depth map for the "bump" effect
+                displacementScale={0.3}
+                roughness={0.8}
+                metalness={0.2}
+                side={THREE.DoubleSide}
+            />
+        </mesh>
+    );
+}
 
 interface PropertyData {
     name: string;
@@ -25,6 +64,10 @@ interface PropertyData {
     notes: string;
     images?: string[];
     constructionProgress?: number;
+    blueprintUrl?: string;
+    rooms?: any[];
+    isometric25DUrl?: string;
+    videoUrl?: string;
 }
 
 const progressStages = [
@@ -140,8 +183,29 @@ function PropertyEditorContent() {
     const [images, setImages] = useState<string[]>([]);
     const [progress, setProgress] = useState(0);
     const [completionState, setCompletionState] = useState<string>('planning');
-    const [notes, setNotes] = useState('');
-    const [newImageUrl, setNewImageUrl] = useState('');
+    const [imagesPerRoom, setImagesPerRoom] = useState(3);
+    const [videoLength, setVideoLength] = useState(30);
+
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+    // AI Orchestrator States
+    const [blueprintFile, setBlueprintFile] = useState<File | null>(null);
+    const [blueprintUrl, setBlueprintUrl] = useState<string | null>(null);
+    const [rooms, setRooms] = useState<any[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    
+    // --- 2.5D Orchestrator States ---
+    const [isOrchestrating, setIsOrchestrating] = useState(false);
+    const [orchestratorStep, setOrchestratorStep] = useState<string | null>(null);
+    const [orchestratorProgress, setOrchestratorProgress] = useState<number>(0);
+    const [orchestratorError, setOrchestratorError] = useState<string | null>(null);
+    const [orchestratorTrigger, setOrchestratorTrigger] = useState<number>(0); // Timestamp from mobile
+
+    const [isometric25DUrl, setIsometric25DUrl] = useState<string | null>(null);
+    const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+    const blueprintInputRef = useRef<HTMLInputElement>(null);
+
     // Property fields
     const [propName, setPropName] = useState('');
     const [propAddress, setPropAddress] = useState('');
@@ -153,37 +217,78 @@ function PropertyEditorContent() {
     const contentRef = useRef<HTMLDivElement>(null);
     const accentColor = companyInfo?.brandColor1 || '#0A58CA';
 
-    useEffect(() => {
-        const unsub = onAuthStateChanged(auth, async (user) => {
-            if (user && propertyId) {
-                setCompanyId(user.uid);
-                const [compSnap, propSnap] = await Promise.all([
-                    getDoc(doc(db, 'companies', user.uid)),
-                    getDoc(doc(db, 'properties', propertyId)),
-                ]);
-                if (compSnap.exists()) setCompanyInfo(compSnap.data());
-                if (propSnap.exists()) {
-                    const data = propSnap.data() as PropertyData;
-                    setProperty(data);
-                    setImages(data.images || []);
-                    setProgress(data.constructionProgress ?? (data.completionState === 'completed' ? 100 : data.completionState === 'construction' ? 50 : 15));
-                    setCompletionState(data.completionState || 'planning');
-                    setNotes(data.notes || '');
-                    setPropName(data.name || '');
-                    setPropAddress(data.address || '');
-                    setPropPlusCode(data.googlePlusCode || '');
-                    setPropTenant(data.tenantName || '');
-                    setPropCashPower(data.nawecCashPower || '');
-                    setPropWaterBill(data.nawecWaterBill || '');
-                }
-                setLoading(false);
-            }
-        });
-        return () => unsub();
-    }, [propertyId]);
+    // Generate the special capture URL for the mobile app
+    const captureUrl = `https://samakerrmobile.vercel.app/capture?id=${propertyId || 'demo'}&imagesPerRoom=${imagesPerRoom}&videoLength=${videoLength}`;
 
     useEffect(() => {
-        if (!loading && contentRef.current) {
+        let unsubscribeProperty = () => {};
+
+        const unsubAuth = onAuthStateChanged(auth, async (user) => {
+            if (user && propertyId) {
+                setCompanyId(user.uid);
+                const compSnap = await getDoc(doc(db, 'companies', user.uid));
+                if (compSnap.exists()) setCompanyInfo(compSnap.data());
+
+                // Real-time listener for property data (core data)
+                unsubscribeProperty = onSnapshot(doc(db, 'properties', propertyId), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data() as any;
+                        setProperty(data);
+                        setImages(data.images || []);
+                        setProgress(data.constructionProgress ?? (data.completionState === 'completed' ? 100 : data.completionState === 'construction' ? 50 : 15));
+                        setCompletionState(data.completionState || 'planning');
+
+                        if (!propName) setPropName(data.name || '');
+                        if (!propAddress) setPropAddress(data.address || '');
+                        if (!propPlusCode) setPropPlusCode(data.googlePlusCode || '');
+                        if (!propTenant) setPropTenant(data.tenantName || '');
+                        if (!propCashPower) setPropCashPower(data.nawecCashPower || '');
+                        if (!propWaterBill) setPropWaterBill(data.nawecWaterBill || '');
+
+                        setBlueprintUrl(data.blueprintUrl || null);
+                        setRooms(data.rooms || []);
+
+                        if (data.isometric25DUrl) setIsometric25DUrl(data.isometric25DUrl);
+                        if (data.videoUrl) setVideoUrl(data.videoUrl);
+                    }
+                    setLoading(false);
+                });
+
+                // Real-time listener for Orchestration Progress (RTDB for low latency)
+                const orchestrationRef = rtdbRef(rtdb, `orchestration/${propertyId}`);
+                onValue(orchestrationRef, (snapshot) => {
+                    const orchData = snapshot.val();
+                    if (orchData) {
+                        // Detect and wipe stale orchestration data from crashed/timed-out runs
+                        const updatedAt = orchData.updatedAt ? new Date(orchData.updatedAt).getTime() : 0;
+                        const ageMs = Date.now() - updatedAt;
+                        const isStale = ageMs > 10 * 60 * 1000 && orchData.progress < 100 && !orchData.error;
+                        if (isStale && orchData.isOrchestrating) {
+                            console.warn(`[RTDB] Wiping stale orchestration data (age: ${Math.round(ageMs / 1000)}s)`);
+                            set(rtdbRef(rtdb, `orchestration/${propertyId}`), null).catch(() => {});
+                            return;
+                        }
+
+                        setIsOrchestrating(orchData.isOrchestrating || false);
+                        setOrchestratorStep(orchData.step || null);
+                        setOrchestratorProgress(orchData.progress || 0);
+                        setOrchestratorError(orchData.error || null);
+                        if (orchData.trigger) setOrchestratorTrigger(orchData.trigger);
+                    }
+                });
+            }
+        });
+
+        return () => {
+            unsubAuth();
+            unsubscribeProperty();
+            if (propertyId) off(rtdbRef(rtdb, `orchestration/${propertyId}`));
+        };
+    }, [propertyId]);
+
+    // We removed the auto-trigger useEffect here so the user has to click "Begin Process" manually.
+
+    useEffect(() => {        if (!loading && contentRef.current) {
             gsap.fromTo(contentRef.current, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' });
         }
     }, [loading]);
@@ -207,7 +312,8 @@ function PropertyEditorContent() {
                 images,
                 constructionProgress: progress,
                 completionState: state,
-                notes,
+                blueprintUrl,
+                rooms,
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 2500);
@@ -218,15 +324,144 @@ function PropertyEditorContent() {
         }
     };
 
-    const addImage = () => {
-        if (newImageUrl.trim()) {
-            setImages(prev => [...prev, newImageUrl.trim()]);
-            setNewImageUrl('');
+    const removeImage = (index: number) => {
+        setImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleOrchestrate = async () => {
+        if (!propertyId || !blueprintUrl || rooms.length === 0) {
+            alert("Missing blueprint or mapped rooms.");
+            return;
+        }
+
+        setIsOrchestrating(true);
+        // Reset the trigger so it doesn't fire again
+        if (orchestratorTrigger > 0) {
+            setOrchestratorTrigger(0);
+            try {
+                await set(rtdbRef(rtdb, `orchestration/${propertyId}/trigger`), 0);
+            } catch (e) { console.warn("Failed to reset trigger", e); }
+        }
+
+        try {
+            const res = await fetch('/api/orchestrate-2-5d', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    propertyId,
+                    blueprintUrl,
+                    rooms
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || 'Orchestration failed');
+            }
+
+            const data = await res.json();
+            setIsometric25DUrl(data.isometric25DUrl);
+            if (data.videoUrl) setVideoUrl(data.videoUrl);
+            setRooms(data.rooms);
+
+            await updateDoc(doc(db, 'properties', propertyId), {
+                rooms: data.rooms,
+                isometric25DUrl: data.isometric25DUrl,
+                ...(data.videoUrl && { videoUrl: data.videoUrl })
+            });
+            
+            alert("Generation Complete!");
+        } catch (err: any) {
+            console.error("Orchestration failed:", err);
+            alert(`Generation failed: ${err.message}`);
+        } finally {
+            setIsOrchestrating(false);
         }
     };
 
-    const removeImage = (index: number) => {
-        setImages(prev => prev.filter((_, i) => i !== index));
+    const handleBlueprintUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0 || !propertyId) return;
+        const file = e.target.files[0];
+        setBlueprintFile(file);
+        setIsAnalyzing(true);
+
+        try {
+            // 1. Securely upload to GCP Storage via our backend (NO CORS ISSUES)
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('propertyId', propertyId);
+            formData.append('type', 'blueprint');
+            
+            // If they are replacing an existing blueprint, pass the old URL to the backend so it can be deleted
+            if (blueprintUrl) {
+                 formData.append('oldUrl', blueprintUrl);
+            }
+
+            const uploadRes = await fetch('/api/upload-media', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!uploadRes.ok) {
+                const err = await uploadRes.json();
+                throw new Error(err.error || 'Upload failed');
+            }
+
+            const { url: downloadUrl } = await uploadRes.json();
+            setBlueprintUrl(downloadUrl);
+
+            // 2. Send to Vertex AI to extract rooms
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                try {
+                    const base64String = (reader.result as string).split(',')[1];
+                    const res = await fetch('/api/analyze-floorplan', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ imageBase64: base64String, mimeType: file.type })
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        setRooms(data.rooms || []);
+                        setIsometric25DUrl(null);
+                        setVideoUrl(null);
+                        setIsOrchestrating(false);
+                        
+                        // Auto-save to firestore (Firebase is just keeping the text record)
+                        await updateDoc(doc(db, 'properties', propertyId), {
+                            blueprintUrl: downloadUrl,
+                            rooms: data.rooms || [],
+                            isometric25DUrl: null,
+                            videoUrl: null
+                        });
+                        
+                        // Clear the RTDB trigger flag so it doesn't auto-fire randomly
+                        try {
+                            await set(rtdbRef(rtdb, `orchestration/${propertyId}/trigger`), 0);
+                            await set(rtdbRef(rtdb, `orchestration/${propertyId}/isOrchestrating`), false);
+                        } catch(e) {}
+                    } else {
+                        const errData = await res.json();
+                        console.error("Vertex AI API Error:", errData);
+                        alert(`Analysis failed: ${errData.error}. Details: ${errData.details || 'None'}`);
+                        setBlueprintUrl(null); 
+                    }
+                } catch (err) {
+                    console.error("Fetch failed", err);
+                    alert("Failed to connect to the analysis service.");
+                    setBlueprintUrl(null);
+                } finally {
+                    setIsAnalyzing(false);
+                }
+            };
+            reader.readAsDataURL(file);
+
+        } catch (err: any) {
+            console.error("Blueprint upload failed", err);
+            alert(`Failed to upload to GCP: ${err.message}`);
+            setIsAnalyzing(false);
+        }
     };
 
     // Find current stage
@@ -390,105 +625,375 @@ function PropertyEditorContent() {
                         </div>
                     </section>
 
-                    {/* ──── 3. GALLERY ──── */}
+                    {/* ──── 3. PROPERTY VISION PIPELINE ──── */}
                     <section>
-                        <h2 className="text-[18px] font-bold text-[#1b1b1b] mb-1">Property Gallery</h2>
-                        <p className="text-[13px] text-[#605e5c] mb-6">Add images that tenants can view on their mobile app.</p>
+                        <div className="flex items-center gap-2 mb-1">
+                            <Wand2 size={20} className="text-[#0A58CA]" />
+                            <h2 className="text-[18px] font-bold text-[#1b1b1b]">Property Vision Pipeline</h2>
+                        </div>
+                        <p className="text-[13px] text-[#605e5c] mb-6">First upload the property blueprint, then scan the QR code to capture room photos on mobile.</p>
 
-                        <div className="bg-white border border-[#e1dfdd] shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6">
-                            {/* Add image input */}
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="flex-1 flex items-center gap-2.5 border-b border-[#8a8886] focus-within:border-b-2 focus-within:border-[#0067b8] pb-1.5 pt-2 transition-all">
-                                    <ImageIcon size={16} className="text-[#a19f9d] shrink-0" />
-                                    <input
-                                        type="text"
-                                        placeholder="Paste image URL..."
-                                        value={newImageUrl}
-                                        onChange={(e) => setNewImageUrl(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && addImage()}
-                                        className="border-none bg-transparent w-full outline-none text-[14px] text-[#1b1b1b] placeholder:text-[#605e5c] placeholder:font-light"
-                                    />
-                                </div>
-                                <button
-                                    onClick={addImage}
-                                    disabled={!newImageUrl.trim()}
-                                    className="flex items-center gap-2 px-5 py-2 text-[13px] font-semibold text-white transition-colors hover:brightness-95 disabled:opacity-40"
-                                    style={{ backgroundColor: accentColor }}
-                                >
-                                    <Upload size={14} /> Add
-                                </button>
-                            </div>
-
-                            {/* Image grid */}
-                            {images.length > 0 ? (
-                                <div className="grid grid-cols-3 gap-4">
-                                    {images.map((img, i) => (
-                                        <div key={i} className="relative group aspect-[4/3] bg-[#f3f2f1] overflow-hidden border border-[#e1dfdd]">
-                                            <img src={img} alt={`Property ${i + 1}`} className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                                                <button
-                                                    onClick={() => removeImage(i)}
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity w-10 h-10 bg-white/90 flex items-center justify-center text-[#e81123] hover:bg-white"
+                        <div className="bg-white border border-[#0A58CA]/30 shadow-[0_4px_16px_rgba(10,88,202,0.08)] p-6 rounded-lg relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#0A58CA]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                            
+                            <div className="grid grid-cols-[1fr_auto] gap-10 items-start relative z-10">
+                                <div className="space-y-6">
+                                    
+                                    {/* Step 1: Blueprint */}
+                                    <div className={`p-5 rounded-lg border transition-colors ${blueprintUrl ? 'border-[#34C759] bg-[#34C759]/5' : 'border-[#0067b8]/30 bg-[#f3f9fd]'}`}>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <label className="flex items-center gap-2 text-[14px] font-semibold text-[#1b1b1b]">
+                                                {blueprintUrl ? <CheckCircle2 size={18} className="text-[#34C759]" /> : <span className="w-5 h-5 rounded-full bg-[#0067b8] text-white flex items-center justify-center text-[11px]">1</span>}
+                                                Upload Blueprint
+                                            </label>
+                                            {blueprintUrl && rooms.length > 0 && (
+                                                <span className="text-[12px] font-bold text-[#34C759]">{rooms.length} Rooms Mapped</span>
+                                            )}
+                                        </div>
+                                        
+                                        {!blueprintUrl ? (
+                                            <div className="flex flex-col gap-3">
+                                                <p className="text-[12px] text-[#605e5c]">Upload a 2D floorplan. Our Vision Agent will segment the rooms automatically.</p>
+                                                <input type="file" accept="image/*" className="hidden" ref={blueprintInputRef} onChange={handleBlueprintUpload} />
+                                                <button 
+                                                    onClick={() => blueprintInputRef.current?.click()}
+                                                    disabled={isAnalyzing}
+                                                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-white border border-[#0067b8] text-[#0067b8] rounded font-semibold text-[13px] active:scale-[0.98] transition-all disabled:opacity-50"
                                                 >
-                                                    <Trash2 size={16} />
+                                                    {isAnalyzing ? <div className="w-4 h-4 border-2 border-[#0067b8]/20 border-t-[#0067b8] rounded-full animate-spin" /> : <Upload size={16} />}
+                                                    {isAnalyzing ? 'Mapping Rooms...' : 'Upload Floorplan Image'}
                                                 </button>
                                             </div>
-                                            <span className="absolute bottom-2 left-2 bg-black/50 text-white text-[11px] font-medium px-2 py-0.5">{i + 1}</span>
+                                        ) : (
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-20 h-20 rounded bg-white border border-black/10 overflow-hidden shrink-0">
+                                                    <img src={blueprintUrl} className="w-full h-full object-cover" alt="Blueprint" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-[12px] text-[#1b1b1b] font-medium mb-3">Agent successfully mapped the floorplan.</p>
+                                                    <button 
+                                                        onClick={() => setShowDeleteModal(true)} 
+                                                        className="text-[12px] text-[#e81123] hover:underline font-semibold flex items-center gap-1"
+                                                    >
+                                                        <Trash2 size={14} /> Delete Blueprint
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Step 2: Mobile Parameters */}
+                                    <div className={`p-5 rounded-lg border transition-colors ${!blueprintUrl ? 'opacity-50 pointer-events-none border-[#e1dfdd] bg-[#faf9f8]' : 'border-[#0067b8]/30 bg-[#f3f9fd]'}`}>
+                                        <label className="flex items-center gap-2 text-[14px] font-semibold text-[#1b1b1b] mb-4">
+                                            <span className="w-5 h-5 rounded-full bg-[#0067b8] text-white flex items-center justify-center text-[11px]">2</span>
+                                            Mobile Capture Parameters
+                                        </label>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-[11px] font-semibold text-[#323130] uppercase tracking-wide">Images Per Room</label>
+                                                <select 
+                                                    className="border border-[#c8c6c4] px-3 py-2 text-[14px] text-[#1b1b1b] outline-none focus:border-[#0A58CA] bg-white transition-colors"
+                                                    value={imagesPerRoom}
+                                                    onChange={(e) => setImagesPerRoom(Number(e.target.value))}
+                                                >
+                                                    <option value={1}>1 Image (Fastest)</option>
+                                                    <option value={2}>2 Images</option>
+                                                    <option value={3}>3 Images (Recommended for 2.5D)</option>
+                                                    <option value={5}>5 Images (High Fidelity)</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <label className="text-[11px] font-semibold text-[#323130] uppercase tracking-wide">Cinematic Video Length</label>
+                                                <select 
+                                                    className="border border-[#c8c6c4] px-3 py-2 text-[14px] text-[#1b1b1b] outline-none focus:border-[#0A58CA] bg-white transition-colors"
+                                                    value={videoLength}
+                                                    onChange={(e) => setVideoLength(Number(e.target.value))}
+                                                >
+                                                    <option value={15}>15 Seconds (Shorts/Reels)</option>
+                                                    <option value={30}>30 Seconds</option>
+                                                    <option value={60}>60 Seconds</option>
+                                                </select>
+                                            </div>
                                         </div>
-                                    ))}
+                                    </div>
+
                                 </div>
-                            ) : (
-                                <div className="bg-[#faf9f8] border border-dashed border-[#c8c6c4] p-12 flex flex-col items-center gap-3">
-                                    <ImageIcon size={32} className="text-[#c8c6c4]" />
-                                    <p className="text-[14px] text-[#a19f9d] font-medium text-center">No images yet. Paste a URL above to add property photos.</p>
-                                </div>
-                            )}
-                        </div>
-                    </section>
 
-                    {/* ──── 4. NOTES ──── */}
-                    <section>
-                        <h2 className="text-[18px] font-bold text-[#1b1b1b] mb-1">Property Notes</h2>
-                        <p className="text-[13px] text-[#605e5c] mb-6">Add status updates or notes visible to your team.</p>
-
-                        <div className="bg-white border border-[#e1dfdd] shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6">
-                            <textarea
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Any notes about this property..."
-                                className="w-full border border-[#c8c6c4] px-4 py-3 text-[14px] text-[#1b1b1b] outline-none focus:border-[#0A58CA] transition-colors resize-y min-h-[120px] placeholder:text-[#605e5c] placeholder:font-light"
-                            />
-                        </div>
-                    </section>
-
-                    {/* ──── 5. 3D MODEL & BLUEPRINTS (Coming Soon) ──── */}
-                    <section className="pb-8">
-                        <h2 className="text-[18px] font-bold text-[#1b1b1b] mb-1">3D Model & Blueprints</h2>
-                        <p className="text-[13px] text-[#605e5c] mb-6">Upload architectural blueprints and 3D models for this property.</p>
-
-                        <div className="bg-[#f3f9fd] border border-[#cce3f5] p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-                            <div className="absolute right-0 top-0 w-48 h-48 bg-[#0067b8] opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-                            <div className="flex items-start gap-4 relative z-10">
-                                <div className="w-12 h-12 bg-white border border-[#cce3f5] flex items-center justify-center shrink-0">
-                                    <Cuboid size={24} className="text-[#0067b8]" />
-                                </div>
-                                <div>
-                                    <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-1">Coming Soon</h3>
-                                    <p className="text-[13px] text-[#605e5c] max-w-[400px]">
-                                        Upload 3D models (.glb, .obj) and architectural blueprints (.pdf, .dwg) to share with tenants and contractors.
-                                    </p>
+                                <div className={`flex flex-col items-center bg-[#faf9f8] p-5 border border-[#e1dfdd] rounded-xl shadow-sm transition-opacity ${!blueprintUrl ? 'opacity-40 grayscale' : ''}`}>
+                                    <div className="bg-white p-2 rounded-lg shadow-sm border border-[#e1dfdd] mb-3 relative">
+                                        {!blueprintUrl && <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10"><Wand2 size={24} className="text-[#a19f9d]" /></div>}
+                                        <QRCodeSVG value={captureUrl} size={140} level="M" />
+                                    </div>
+                                    <p className="text-[13px] font-bold text-[#1b1b1b] text-center">Capture QR Code</p>
+                                    <p className="text-[11px] text-[#605e5c] text-center max-w-[140px] mt-1">Scan with Sama Kerr mobile app to shoot mapped rooms.</p>
                                 </div>
                             </div>
-                            <button
-                                disabled
-                                className="relative z-10 shrink-0 bg-white border border-[#0067b8] text-[#0067b8] px-6 py-2.5 text-[14px] font-semibold transition-colors shadow-sm opacity-50 cursor-not-allowed"
-                            >
-                                Upload Files
-                            </button>
                         </div>
+                    </section>
+
+                    {/* ──── 4. PROPERTY PREVIEW ──── */}
+                    <section className="pb-8">
+                        <div className="flex justify-between items-end mb-6">
+                            <div>
+                                <h2 className="text-[18px] font-bold text-[#1b1b1b] mb-1">Property Preview</h2>
+                                <p className="text-[13px] text-[#605e5c]">2.5D interactive floorplans, cinematic videos, and enhanced photography.</p>
+                            </div>
+                            {(isometric25DUrl || videoUrl || rooms.some(r => r.heroImageUrl)) && (
+                                <button
+                                    onClick={handleOrchestrate}
+                                    disabled={isOrchestrating || !blueprintUrl || rooms.length === 0 || !rooms[0].photos}
+                                    className="bg-white border border-[#0067b8] text-[#0067b8] px-5 py-2 text-[13px] font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0067b8] hover:text-white"
+                                >
+                                    Regenerate Assets
+                                </button>
+                            )}
+                        </div>
+
+                        {(!isometric25DUrl && !videoUrl && !rooms.some(r => r.heroImageUrl) && !isOrchestrating) ? (
+                            orchestratorTrigger > 0 ? (
+                                <div className="bg-[#f3f9fd] border border-[#0067b8]/30 shadow-[0_4px_16px_rgba(10,88,202,0.08)] p-10 flex flex-col items-center gap-4 rounded-xl">
+                                    <div className="w-16 h-16 bg-[#0067b8] text-white rounded-full flex items-center justify-center shadow-md animate-bounce">
+                                        <Smartphone size={32} />
+                                    </div>
+                                    <h3 className="text-[20px] font-bold text-[#1b1b1b]">Mobile Capture Received!</h3>
+                                    <p className="text-[14px] text-[#605e5c] text-center max-w-[400px]">
+                                        Room photography has been successfully synced from the Sama Kerr app. The pipeline is ready to generate 2.5D models and cinematic video.
+                                    </p>
+                                    <button
+                                        onClick={handleOrchestrate}
+                                        className="mt-4 bg-[#0A58CA] text-white px-8 py-3 text-[15px] font-semibold hover:bg-[#084298] transition-all rounded shadow-md flex items-center gap-2"
+                                    >
+                                        <Wand2 size={18} />
+                                        Begin Process
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="bg-[#faf9f8] border border-dashed border-[#c8c6c4] p-8 flex flex-col items-center gap-3">
+                                    <Wand2 size={32} className="text-[#c8c6c4]" />
+                                    <p className="text-[14px] text-[#a19f9d] font-medium text-center">Complete the Property Vision Pipeline process to view property media.</p>
+                                </div>
+                            )
+                        ) : (
+                            <div className="bg-[#f3f9fd] border border-[#cce3f5] p-8 flex flex-col gap-8 relative overflow-hidden transition-all duration-700 ease-in-out min-h-[300px]">
+                                <div className="absolute right-0 top-0 w-48 h-48 bg-[#0067b8] opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                                
+                                {/* 1. Enhanced Pictures Box */}
+                                {rooms.some(r => r.heroImageUrl) && (
+                                    <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                                        <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
+                                            <ImageIcon size={18} className="text-[#0A58CA]" /> 
+                                            Enhanced Room Photography
+                                        </h3>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            {rooms.filter(r => r.heroImageUrl).map((room, i) => (
+                                                <div key={i} className="group relative aspect-[4/3] bg-[#f3f2f1] overflow-hidden border border-[#e1dfdd]">
+                                                    <img src={room.heroImageUrl} alt={room.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
+                                                        <p className="text-white text-[12px] font-semibold truncate">{room.name}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 2. Cinematic Video Box */}
+                                {videoUrl && (
+                                    <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                                        <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
+                                            <Wand2 size={18} className="text-[#0A58CA]" /> 
+                                            Cinematic Property Tour (Video)
+                                        </h3>
+                                        <div className="w-full aspect-[16/9] bg-black border border-[#e1dfdd] overflow-hidden relative">
+                                            <video 
+                                                src={videoUrl} 
+                                                controls 
+                                                autoPlay
+                                                muted
+                                                loop
+                                                className="w-full h-full object-contain"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 3. 3D Canvas Box */}
+                                {isometric25DUrl && (
+                                    <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                                        <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
+                                            <Cuboid size={18} className="text-[#0A58CA]" /> 
+                                            Interactive 3D Canvas (Parallax)
+                                        </h3>
+                                        <div className="w-full aspect-[16/9] bg-[#e1dfdd] border border-[#e1dfdd] overflow-hidden relative group cursor-move">
+                                            <Canvas camera={{ position: [0, 0, 7.5], fov: 45 }}>
+                                                <ambientLight intensity={0.5} />
+                                                <directionalLight position={[10, 10, 5]} intensity={1} />
+                                                <Suspense fallback={null}>
+                                                    <ParallaxImage url={isometric25DUrl} />
+                                                </Suspense>
+                                            </Canvas>
+                                            <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white text-[11px] font-medium pointer-events-none">
+                                                <Cuboid size={12} /> Drag to explore 3D
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Overlay for Orchestration Progress */}
+                                {(isOrchestrating || orchestratorError) && (
+                                    <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center p-8">
+                                        <div className="w-full max-w-[500px] bg-white border border-[#0067b8]/20 shadow-[0_8px_30px_rgba(0,103,184,0.1)] p-8 rounded-xl flex flex-col items-center text-center">
+                                            <div className="w-16 h-16 bg-[#f3f9fd] text-[#0A58CA] rounded-full flex items-center justify-center mb-6 overflow-hidden relative">
+                                                {orchestratorError ? <X size={32} className="text-[#e81123]" /> : (
+                                                    <>
+                                                        <Wand2 size={32} className="animate-pulse absolute" />
+                                                        <div className="absolute bottom-0 left-0 right-0 bg-[#0067b8]/20" style={{ height: `${orchestratorProgress}%`, transition: 'height 0.5s ease-out' }} />
+                                                    </>
+                                                )}
+                                            </div>
+                                            <h3 className="text-[20px] font-bold text-[#1b1b1b] mb-2">
+                                                {orchestratorError ? "Pipeline Error" : "Processing Pipeline"}
+                                            </h3>
+                                            
+                                            {/* Microsoft-style sliding text animation */}
+                                            <div className="h-[24px] overflow-hidden mb-8 relative w-full flex justify-center">
+                                                <p key={orchestratorStep} className={`text-[14px] font-medium absolute animate-fade-slide-up ${orchestratorError ? 'text-[#e81123]' : 'text-[#605e5c]'}`}>
+                                                    {orchestratorError ? orchestratorError : (orchestratorStep || 'Initializing pipeline...')}
+                                                </p>
+                                            </div>
+                                            
+                                            {!orchestratorError ? (
+                                                <div className="w-full flex flex-col gap-4">
+                                                    <div>
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-[12px] font-semibold text-[#605e5c]">Overall Progress</span>
+                                                            <span className="text-[12px] font-bold text-[#0A58CA]">{Math.round(orchestratorProgress)}%</span>
+                                                        </div>
+                                                        <div className="w-full h-2 bg-[#f3f2f1] overflow-hidden rounded-full">
+                                                            <div 
+                                                                className="h-full bg-[#0A58CA] transition-all duration-500 ease-out"
+                                                                style={{ width: `${orchestratorProgress}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (confirm("Are you sure you want to cancel the current pipeline process? This will reset the state.")) {
+                                                                // 1. Instantly override local state so the UI updates immediately without waiting for Firebase sync
+                                                                setIsOrchestrating(false);
+                                                                setOrchestratorStep(null);
+                                                                setOrchestratorProgress(0);
+                                                                setOrchestratorError(null);
+                                                                
+                                                                // 2. Bruteforce wipe the node in RTDB
+                                                                try {
+                                                                    const { set } = await import('firebase/database');
+                                                                    if (propertyId) {
+                                                                        // Setting it to null completely removes the node, rather than just updating fields,
+                                                                        // preventing any lingering data from overriding the state back.
+                                                                        await set(rtdbRef(rtdb, `orchestration/${propertyId}`), null);
+                                                                        console.log("RTDB Orchestration node wiped.");
+                                                                    }
+                                                                } catch (e) {
+                                                                    console.error("Failed to reset RTDB state", e);
+                                                                }
+                                                            }
+                                                        }}
+                                                        className="text-[12px] font-semibold text-[#e81123] hover:underline mt-2"
+                                                    >
+                                                        Cancel & Reset Pipeline
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={handleOrchestrate}
+                                                    className="bg-[#e81123] text-white px-8 py-3 text-[14px] font-semibold hover:bg-[#c50f1f] transition-colors rounded shadow-sm"
+                                                >
+                                                    Retry Pipeline
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </section>
                 </div>
             </div>
+
+            {/* Delete Blueprint Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white border border-[#e1dfdd] shadow-[0_8px_30px_rgba(0,0,0,0.12)] p-6 max-w-[400px] w-full mx-4 rounded-lg">
+                        <h3 className="text-[18px] font-bold text-[#1b1b1b] mb-2">Wipe Property Pipeline?</h3>
+                        <p className="text-[14px] text-[#605e5c] mb-6">
+                            This will permanently delete the floorplan, all generated images, 3D scenes, and videos associated with this property across our cloud storage and databases.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button 
+                                onClick={() => setShowDeleteModal(false)}
+                                className="px-4 py-2 text-[14px] font-semibold text-[#1b1b1b] bg-[#f3f2f1] hover:bg-[#e1dfdd] transition-colors rounded"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={async () => {
+                                    setShowDeleteModal(false);
+                                    setIsAnalyzing(true);
+                                    
+                                    // 1. Immediately wipe all local state
+                                    setIsOrchestrating(false);
+                                    setOrchestratorStep(null);
+                                    setOrchestratorProgress(0);
+                                    setOrchestratorError(null);
+                                    setIsometric25DUrl(null);
+                                    setVideoUrl(null);
+                                    setBlueprintUrl(null);
+                                    setRooms([]);
+                                    setImages([]); // also clear raw images locally
+
+                                    try {
+                                        // 2. Wipe everything under this property's prefix from Storage
+                                        if (propertyId) {
+                                            await fetch('/api/upload-media', {
+                                                method: 'DELETE',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ propertyId: propertyId })
+                                            });
+
+                                            // 3. Wipe from Firestore
+                                            await updateDoc(doc(db, 'properties', propertyId), {
+                                                blueprintUrl: null,
+                                                rooms: [],
+                                                images: [], // wipe raw images from firestore too
+                                                isometric25DUrl: null,
+                                                videoUrl: null
+                                            });
+
+                                            // 4. WIPEOUT the Realtime Database state completely
+                                            try {
+                                                const { set } = await import('firebase/database');
+                                                await set(rtdbRef(rtdb, `orchestration/${propertyId}`), null);
+                                            } catch (e) {
+                                                console.error("RTDB wipe failed", e);
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error("Failed to completely delete blueprint and models:", e);
+                                        alert("Warning: Failed to clear all remote assets.");
+                                    } finally {
+                                        setIsAnalyzing(false);
+                                    }
+                                }}
+                                className="px-4 py-2 text-[14px] font-semibold text-white bg-[#e81123] hover:bg-[#c50f1f] transition-colors rounded"
+                            >
+                                Delete Entire Pipeline
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -81,7 +81,7 @@ export default function Home() {
               The ultimate real estate management suite
             </h1>
             <div className="flex justify-center">
-              <Link href="/auth" className="bg-accent-blue text-white px-8 py-4 rounded-lg font-semibold hover:bg-accent-hover transition-colors">
+              <Link href="/auth" className="bg-accent-blue text-white px-8 py-4 rounded-fluent-lg font-semibold hover:bg-accent-hover transition-colors">
                 Get Started
               </Link>
             </div>
@@ -92,7 +92,7 @@ export default function Home() {
       {/* Corporate Layer */}
       <section className="px-10 py-[100px] max-w-[1400px] mx-auto" ref={addToRefs} id="corporate">
         <div className="flex flex-col lg:flex-row items-center gap-10 lg:gap-20">
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl flex-[1.2] w-full aspect-[16/10] group animate-element">
+          <div className="relative rounded-fluent-xl overflow-hidden shadow-fluent-lg flex-[1.2] w-full aspect-[16/10] group animate-element">
             <Image
               src="/office-collaboration.png"
               alt="Corporate Collaboration"
@@ -128,7 +128,7 @@ export default function Home() {
               Track financial lifecycles, monitor construction progress, and generate unique QR codes for each property. The Management Layer is built for the seasoned executive who commands absolute oversight, transforming scattered data into actionable, confident leadership.
             </p>
           </div>
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl flex-[1.2] w-full aspect-[16/10] group animate-element">
+          <div className="relative rounded-fluent-xl overflow-hidden shadow-fluent-lg flex-[1.2] w-full aspect-[16/10] group animate-element">
             <Image
               src="/management-confidence.png"
               alt="Management Confidence"
@@ -150,7 +150,7 @@ export default function Home() {
           <p className="text-lg text-secondary-text leading-relaxed">Bring the digital revolution directly to the doorsteps of your clients. From tracking the joy of their home's construction progress to seamlessly automating utility payments like NAWEC directly from the app.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl w-full aspect-[16/10] group animate-element">
+          <div className="relative rounded-fluent-xl overflow-hidden shadow-fluent-lg w-full aspect-[16/10] group animate-element">
             <Image
               src="/nawec-relief.png"
               alt="NAWEC Relief"
@@ -161,7 +161,7 @@ export default function Home() {
               <h3 className="text-2xl font-medium">Utility Bills Sorted</h3>
             </div>
           </div>
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl w-full aspect-[16/10] group animate-element">
+          <div className="relative rounded-fluent-xl overflow-hidden shadow-fluent-lg w-full aspect-[16/10] group animate-element">
             <Image
               src="/progress-joy.png"
               alt="Track Construction Progress"
@@ -183,19 +183,19 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl w-full aspect-[9/16] group animate-element">
+          <div className="relative rounded-fluent-xl overflow-hidden shadow-fluent-lg w-full aspect-[9/16] group animate-element">
             <Image src="/the-qr-scan.png" alt="QR Scan" fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
             <div className="absolute bottom-0 left-0 w-full p-8 pt-16 bg-gradient-to-t from-black/85 to-transparent text-white">
               <h3 className="text-xl font-medium">Instant QR Onboarding</h3>
             </div>
           </div>
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl w-full aspect-[9/16] group animate-element">
+          <div className="relative rounded-fluent-xl overflow-hidden shadow-fluent-lg w-full aspect-[9/16] group animate-element">
             <Image src="/maintenance-ease.png" alt="Maintenance" fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
             <div className="absolute bottom-0 left-0 w-full p-8 pt-16 bg-gradient-to-t from-black/85 to-transparent text-white">
               <h3 className="text-xl font-medium">Hassle-free Maintenance</h3>
             </div>
           </div>
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl w-full aspect-[9/16] group animate-element">
+          <div className="relative rounded-fluent-xl overflow-hidden shadow-fluent-lg w-full aspect-[9/16] group animate-element">
             <Image src="/digital-lifestyle.png" alt="Digital Lifestyle" fill className="object-cover transition-transform duration-700 group-hover:scale-105" />
             <div className="absolute bottom-0 left-0 w-full p-8 pt-16 bg-gradient-to-t from-black/85 to-transparent text-white">
               <h3 className="text-xl font-medium">The Ultimate Digital Lifestyle</h3>
@@ -231,7 +231,7 @@ export default function Home() {
           </div>
 
           <div className="flex justify-center w-full animate-element">
-            <div className="bg-primary-bg rounded-3xl w-full max-w-[440px] overflow-hidden shadow-2xl border-2 border-accent-blue transition-transform hover:-translate-y-2 duration-300">
+            <div className="bg-primary-bg rounded-3xl w-full max-w-[440px] overflow-hidden shadow-fluent-lg border-2 border-accent-blue transition-transform hover:-translate-y-2 duration-300">
               <div className="p-8 pb-8 border-b border-border-subtle">
                 <h3 className="text-xl font-semibold mb-5 text-primary-text">Sama Kerr Suite</h3>
                 <div className="flex items-start mb-6 text-primary-text">
@@ -240,7 +240,7 @@ export default function Home() {
                   <span className="self-end mb-1 ml-1 text-secondary-text">/year</span>
                 </div>
                 <p className="text-sm text-secondary-text leading-relaxed mb-8 min-h-[42px]">Complete AI infrastructure and Management Ledger functionality for modern real estate portfolios.</p>
-                <Link href="/auth" className="block w-full text-center bg-accent-blue text-white px-6 py-3.5 rounded-lg font-semibold hover:bg-accent-hover transition-colors mb-4">Get Started</Link>
+                <Link href="/auth" className="block w-full text-center bg-accent-blue text-white px-6 py-3.5 rounded-fluent-lg font-semibold hover:bg-accent-hover transition-colors mb-4">Get Started</Link>
                 <Link href="#" className="flex justify-center items-center gap-1.5 text-accent-blue text-sm font-semibold hover:underline">Contact Sales <ArrowRight size={14} /></Link>
               </div>
               <div className="p-8 bg-secondary-bg">
