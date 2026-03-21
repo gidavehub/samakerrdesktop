@@ -1,11 +1,11 @@
 /**
- * Grammar of Shelter — Floor Plan Parser
+ * Grammar of Graphics — Floor Plan Parser
  * 
  * The main entry point for Tier 1 (Parser).
  * Takes raw room data from Gemini and produces a complete ParsedFloorPlan.
  * 
  * Pipeline:
- *   RawRoom[] → normalize coordinates → build wall graph → detect doors → ParsedFloorPlan
+ *   RawRoom[] → normalize coordinates → build wall graph → detect doors/windows → ParsedFloorPlan
  */
 
 import {
@@ -41,7 +41,8 @@ function inferRoomType(name: string): RoomType {
 }
 
 /**
- * Convert a raw room's percentage bounding box to world-space meters.
+ * Convert a raw room's percentage bounding box to world-space meters,
+ * passing through structural analysis data.
  */
 function normalizeRoom(raw: RawRoom, config: EngineConfig): ParsedRoom {
   const scale = config.metersPerUnit;
@@ -66,13 +67,16 @@ function normalizeRoom(raw: RawRoom, config: EngineConfig): ParsedRoom {
     area: width * depth,
     roomType: inferRoomType(raw.name),
     floorLevel: 0,
+    structuralAnalysis: raw.structuralAnalysis, // Pass AI analysis through pipeline
+    blueprintDoors: raw.doors,
+    blueprintWindows: raw.windows,
   };
 }
 
 /**
- * Parse a raw room array into a complete floor plan with walls and doors.
+ * Parse a raw room array into a complete floor plan with walls, doors, and windows.
  * 
- * This is the main entry point of the Grammar of Shelter parser.
+ * This is the main entry point of the Grammar of Graphics parser.
  * 
  * @param rawRooms - Array of rooms from Gemini's analyze-floorplan API
  * @param config - Engine configuration (optional, uses defaults)
@@ -96,8 +100,8 @@ export function parseFloorPlan(
   // Step 3: Build the wall graph
   const walls = buildWallGraph(parsedRooms, config);
 
-  // Step 4: Detect and place doors
-  const doors = detectDoors(walls, parsedRooms, config);
+  // Step 4: Detect and place doors/windows (uses AI structural analysis if available)
+  const { doors, windows } = detectDoors(walls, parsedRooms, config);
 
   // Step 5: Compute metadata
   const estimatedFloorArea = parsedRooms.reduce((sum, r) => sum + r.area, 0);
@@ -106,12 +110,14 @@ export function parseFloorPlan(
     rooms: parsedRooms,
     walls,
     doors,
+    windows,
     totalBounds,
     scaleFactor: config.metersPerUnit,
     metadata: {
       originalRoomCount: rawRooms.length,
       wallCount: walls.length,
       doorCount: doors.length,
+      windowCount: windows.length,
       estimatedFloorArea,
     },
   };

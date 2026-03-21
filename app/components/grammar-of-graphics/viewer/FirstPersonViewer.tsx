@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Grammar of Shelter — First-Person Viewer (React Component)
+ * Grammar of Graphics — First-Person Viewer (React Component)
  * 
  * The consumption layer of the engine. This React component:
  * 1. Takes raw room data from Gemini's analyze-floorplan
@@ -100,7 +100,7 @@ function HUDOverlay({ metadata }: { metadata: CompiledScene['metadata'] }) {
 
       {/* Scene info */}
       <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-4 py-3 rounded-lg pointer-events-none">
-        <p className="text-[10px] text-white/50 font-medium uppercase tracking-wider mb-1">Grammar of Shelter</p>
+        <p className="text-[10px] text-white/50 font-medium uppercase tracking-wider mb-1">Grammar of Graphics</p>
         <div className="text-[10px] text-white/60 space-y-0.5">
           <p>{metadata.roomCount} rooms · {metadata.wallCount} walls · {metadata.doorCount} doors</p>
           <p>{metadata.floorArea.toFixed(1)}m² · {metadata.worldWidth.toFixed(1)}m × {metadata.worldDepth.toFixed(1)}m</p>
@@ -122,7 +122,7 @@ interface FirstPersonViewerProps {
 }
 
 /**
- * The Grammar of Shelter First-Person Viewer.
+ * The Grammar of Graphics First-Person Viewer.
  * 
  * Feed it raw room data and it handles the entire pipeline:
  * parse → compile → render → navigate
@@ -145,7 +145,7 @@ export default function FirstPersonViewer({
       const floorPlan = parseFloorPlan(rooms, config);
       return compileScene(floorPlan, config);
     } catch (err) {
-      console.error('[Grammar of Shelter] Compilation failed:', err);
+      console.error('[Grammar of Graphics] Compilation failed:', err);
       return null;
     }
   }, [rooms, config]);

@@ -1,15 +1,16 @@
 /**
- * Grammar of Shelter — Material Library
+ * Grammar of Graphics — Material Library
  * 
  * Central registry of Three.js materials mapped to engine MaterialTypes.
  * Each material type produces a reusable THREE.Material instance.
+ * Supports dynamic color creation from AI structural analysis.
  */
 
 import * as THREE from 'three';
 import { MaterialType } from '../types';
 
 /** Color definitions for each material type */
-const MATERIAL_COLORS: Record<MaterialType, { color: string; roughness: number; metalness: number }> = {
+const MATERIAL_COLORS: Record<string, { color: string; roughness: number; metalness: number }> = {
   // Plaster walls
   plaster_white:   { color: '#f5f0eb', roughness: 0.9,  metalness: 0.0 },
   plaster_cream:   { color: '#f0e6d3', roughness: 0.9,  metalness: 0.0 },
@@ -42,6 +43,10 @@ const MATERIAL_COLORS: Record<MaterialType, { color: string; roughness: number; 
 
   // Glass
   glass:           { color: '#c8e8ff', roughness: 0.1,  metalness: 0.3 },
+  window_glass:    { color: '#d0ecff', roughness: 0.05, metalness: 0.1 },
+
+  // Custom (fallback)
+  custom:          { color: '#cccccc', roughness: 0.8,  metalness: 0.0 },
 };
 
 /** Cache of created materials to avoid duplicates */
@@ -69,6 +74,55 @@ export function getMaterial(type: MaterialType): THREE.MeshStandardMaterial {
 
   materialCache.set(cacheKey, material);
   return material;
+}
+
+/**
+ * Create a material from an AI-detected hex color.
+ * Used for structural analysis wall/floor colors.
+ * Results are cached by color + roughness + metalness.
+ */
+export function createColorMaterial(
+  hexColor: string,
+  roughness: number = 0.85,
+  metalness: number = 0.0
+): THREE.MeshStandardMaterial {
+  const cacheKey = `custom_${hexColor}_${roughness}_${metalness}`;
+
+  if (materialCache.has(cacheKey)) {
+    return materialCache.get(cacheKey)!;
+  }
+
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(hexColor),
+    roughness,
+    metalness,
+    side: THREE.DoubleSide,
+  });
+
+  materialCache.set(cacheKey, material);
+  return material;
+}
+
+/**
+ * Get the appropriate roughness for a floor material type.
+ */
+export function getFloorRoughness(
+  floorMaterial: string
+): { roughness: number; metalness: number } {
+  switch (floorMaterial) {
+    case 'wood':
+    case 'laminate':
+      return { roughness: 0.7, metalness: 0.0 };
+    case 'tile':
+    case 'marble':
+      return { roughness: 0.3, metalness: 0.1 };
+    case 'carpet':
+      return { roughness: 1.0, metalness: 0.0 };
+    case 'concrete':
+      return { roughness: 0.95, metalness: 0.0 };
+    default:
+      return { roughness: 0.8, metalness: 0.0 };
+  }
 }
 
 /**

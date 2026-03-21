@@ -1,5 +1,5 @@
 /**
- * Grammar of Shelter — Lighting Compiler
+ * Grammar of Graphics — Lighting Compiler
  * 
  * Sets up lighting for the 3D scene:
  * - Ambient light for base illumination

@@ -1,20 +1,30 @@
 /**
- * Grammar of Shelter — Floor Compiler
+ * Grammar of Graphics — Floor Compiler
  * 
  * Creates floor planes for each room using appropriate materials.
+ * Supports AI-detected floor colors from structural analysis.
  */
 
 import * as THREE from 'three';
 import { ParsedRoom } from '../types';
 import { FloorStructure } from '../structures/FloorStructure';
-import { getMaterial } from './MaterialLibrary';
+import { getMaterial, createColorMaterial, getFloorRoughness } from './MaterialLibrary';
 
 /**
  * Compile a single room's floor into a PlaneGeometry mesh.
  */
 function compileRoomFloor(room: ParsedRoom): THREE.Mesh {
-  const structure = new FloorStructure(room.roomType, room.floorLevel);
-  const material = getMaterial(structure.material);
+  let material: THREE.MeshStandardMaterial;
+
+  // Use AI-detected floor color if available
+  if (room.structuralAnalysis?.floorColor && room.structuralAnalysis?.floorMaterial) {
+    const { roughness, metalness } = getFloorRoughness(room.structuralAnalysis.floorMaterial);
+    material = createColorMaterial(room.structuralAnalysis.floorColor, roughness, metalness);
+  } else {
+    // Fallback to room-type-based material
+    const structure = new FloorStructure(room.roomType, room.floorLevel);
+    material = getMaterial(structure.material);
+  }
 
   const width = room.bounds.maxX - room.bounds.minX;
   const depth = room.bounds.maxZ - room.bounds.minZ;
@@ -27,9 +37,10 @@ function compileRoomFloor(room: ParsedRoom): THREE.Mesh {
   mesh.rotation.x = -Math.PI / 2;
 
   // Position at the center of the room, at floor level
+  const level = room.floorLevel || 0;
   mesh.position.set(
     room.center.x,
-    structure.level * 0.01, // tiny offset to avoid z-fighting
+    level * 0.01, // tiny offset to avoid z-fighting
     room.center.z
   );
 
@@ -47,9 +58,6 @@ function compileRoomFloor(room: ParsedRoom): THREE.Mesh {
 
 /**
  * Compile all room floors.
- * 
- * @param rooms - Parsed rooms
- * @returns A Three.js Group containing all floor planes
  */
 export function compileFloors(rooms: ParsedRoom[]): THREE.Group {
   const floorGroup = new THREE.Group();

@@ -1,5 +1,5 @@
 /**
- * Grammar of Shelter — First-Person Controller
+ * Grammar of Graphics — First-Person Controller
  * 
  * Handles arrow key / WASD keyboard input to navigate the 3D scene.
  * Works with the CollisionSystem to prevent walking through walls.

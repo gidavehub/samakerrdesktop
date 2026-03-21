@@ -1,13 +1,39 @@
 /**
- * Grammar of Shelter Engine — Core Type Definitions
+ * Grammar of Graphics Engine — Core Type Definitions
  * 
- * The structural vocabulary of a home: rooms, walls, doors, floors.
+ * The structural vocabulary of a home: rooms, walls, doors, windows, floors.
  * These types are the "language" the engine interprets.
  */
 
 // ============================================================================
 // RAW INPUT TYPES (from Gemini analyze-floorplan)
 // ============================================================================
+
+/** Structural analysis data extracted from room photographs by Gemini */
+export interface StructuralAnalysis {
+  wallColor: string;          // hex color e.g. "#e8d5c4"
+  floorMaterial: 'wood' | 'tile' | 'carpet' | 'concrete' | 'marble' | 'laminate' | 'unknown';
+  floorColor: string;         // hex color
+  doors: {
+    wall: 'north' | 'south' | 'east' | 'west';
+    position: number;         // 0.0–1.0 along the wall
+    type: 'single' | 'double' | 'sliding' | 'french';
+    color: string;            // hex color
+  }[];
+  windows: {
+    wall: 'north' | 'south' | 'east' | 'west';
+    position: number;         // 0.0–1.0 along the wall
+    width: number;            // meters (approximate)
+    height: number;           // meters (approximate)
+    sillHeight: number;       // meters from floor
+    type: 'single' | 'double' | 'bay' | 'sliding' | 'casement';
+    color: string;            // frame color hex
+  }[];
+  furniture?: {
+    type: string;             // e.g. "sofa", "bed", "table"
+    position: { x: number; z: number };  // approximate room-relative position 0-1
+  }[];
+}
 
 /** Raw room data as returned by the Gemini Vision API */
 export interface RawRoom {
@@ -19,10 +45,21 @@ export interface RawRoom {
     width: number;  // 0-100 percentage
     height: number; // 0-100 percentage
   };
+  doors?: {
+    wall: 'north' | 'south' | 'east' | 'west';
+    position: number;
+    type?: string;
+  }[];
+  windows?: {
+    wall: 'north' | 'south' | 'east' | 'west';
+    position: number;
+    width?: number;
+  }[];
   photos?: string[];
-  heroImageUrl?: string;
-  heroImageUrls?: string[];
+  heroImageUrl?: string;      // legacy single image (backward compat)
+  heroImageUrls?: string[];   // 3 studio-quality images
   heroPrompt?: string;
+  structuralAnalysis?: StructuralAnalysis;
 }
 
 // ============================================================================
@@ -59,6 +96,9 @@ export interface ParsedRoom {
   area: number;         // square meters
   roomType: RoomType;
   floorLevel: number;   // 0 = ground floor
+  structuralAnalysis?: StructuralAnalysis;
+  blueprintDoors?: { wall: string, position: number, type?: string }[];
+  blueprintWindows?: { wall: string, position: number, width?: number }[];
 }
 
 /** Recognized room types for material/behavior assignment */
@@ -92,7 +132,9 @@ export interface WallSegment {
   height: number;         // meters
   isExterior: boolean;    // exterior walls are thicker
   roomIds: string[];      // rooms this wall borders (1 = exterior, 2 = shared)
+  roomSideMap: Record<string, 'north' | 'south' | 'east' | 'west'>; // Maps roomId to the wall's cardinal direction
   doors: DoorPosition[];  // doors cut into this wall
+  windows: WindowPosition[];  // windows cut into this wall
   length: number;         // computed length in meters
 }
 
@@ -108,17 +150,32 @@ export interface DoorPosition {
   connectsRooms: [string, string];  // the two room IDs this door connects
 }
 
+/** A window position within a wall */
+export interface WindowPosition {
+  id: string;
+  wallId: string;
+  /** Position along the wall, 0.0 = start, 1.0 = end */
+  positionAlongWall: number;
+  width: number;      // meters
+  height: number;     // meters
+  sillHeight: number; // meters from floor to bottom of window
+  paneCount: number;  // 1 = single pane, 2 = double, etc.
+  frameColor: string; // hex color
+}
+
 /** Complete parsed floor plan — the output of the parser tier */
 export interface ParsedFloorPlan {
   rooms: ParsedRoom[];
   walls: WallSegment[];
   doors: DoorPosition[];
+  windows: WindowPosition[];
   totalBounds: WorldBounds;
   scaleFactor: number;    // how we converted % → meters
   metadata: {
     originalRoomCount: number;
     wallCount: number;
     doorCount: number;
+    windowCount: number;
     estimatedFloorArea: number;  // total sq meters
   };
 }
@@ -145,7 +202,9 @@ export type MaterialType =
   | 'carpet_grey'
   | 'door_wood'
   | 'door_white'
-  | 'glass';
+  | 'glass'
+  | 'window_glass'
+  | 'custom';            // for AI-detected colors
 
 /** Configuration for a wall structure */
 export interface WallConfig {
@@ -153,6 +212,7 @@ export interface WallConfig {
   thickness: number;
   material: MaterialType;
   exteriorMaterial: MaterialType;
+  customColor?: string;   // hex color from structural analysis
 }
 
 /** Configuration for a door structure */
@@ -164,10 +224,22 @@ export interface DoorConfig {
   isOpen: boolean;
 }
 
+/** Configuration for a window structure */
+export interface WindowConfig {
+  width: number;
+  height: number;
+  sillHeight: number;
+  frameThickness: number;
+  frameMaterial: MaterialType;
+  glassMaterial: MaterialType;
+  paneCount: number;
+}
+
 /** Configuration for a floor structure */
 export interface FloorConfig {
   material: MaterialType;
   level: number;
+  customColor?: string;   // hex color from structural analysis
 }
 
 // ============================================================================
@@ -177,7 +249,7 @@ export interface FloorConfig {
 /** A compiled element ready for Three.js rendering */
 export interface CompiledElement {
   id: string;
-  type: 'wall' | 'door' | 'floor' | 'light' | 'label';
+  type: 'wall' | 'door' | 'floor' | 'window' | 'light' | 'label';
   position: Point3D;
   rotation: Point3D;
   scale: Point3D;
@@ -186,10 +258,20 @@ export interface CompiledElement {
 
 /** The complete compiled scene descriptor */
 export interface CompiledScene {
-  elements: CompiledElement[];
+  sceneGroup: import('three').Group;
+  wallsGroup: import('three').Group;
   spawnPoint: Point3D;         // where the camera starts
   spawnLookAt: Point3D;        // where the camera looks initially
   navigationGraph: NavigationNode[];  // for pathfinding
+  metadata: {
+    roomCount: number;
+    wallCount: number;
+    doorCount: number;
+    windowCount: number;
+    floorArea: number;
+    worldWidth: number;
+    worldDepth: number;
+  };
 }
 
 /** A node in the navigation graph for door traversal */
@@ -217,6 +299,12 @@ export interface EngineConfig {
   defaultDoorWidth: number;
   /** Default door height in meters */
   defaultDoorHeight: number;
+  /** Default window width in meters */
+  defaultWindowWidth: number;
+  /** Default window height in meters */
+  defaultWindowHeight: number;
+  /** Default window sill height in meters */
+  defaultWindowSillHeight: number;
   /** Player eye height in meters */
   playerEyeHeight: number;
   /** Player collision radius in meters */
@@ -237,6 +325,9 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   exteriorWallThickness: 0.25,
   defaultDoorWidth: 0.9,
   defaultDoorHeight: 2.1,
+  defaultWindowWidth: 1.2,
+  defaultWindowHeight: 1.0,
+  defaultWindowSillHeight: 0.9,
   playerEyeHeight: 1.6,
   playerCollisionRadius: 0.3,
   movementSpeed: 3.0,

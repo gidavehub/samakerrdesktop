@@ -1,5 +1,5 @@
 /**
- * Grammar of Shelter — Wall Graph Builder
+ * Grammar of Graphics — Wall Graph Builder
  * 
  * The core algorithm that detects walls from room bounding boxes.
  * 
@@ -24,23 +24,14 @@ interface Edge {
   orientation: WallOrientation;
 }
 
-/**
- * Checks if two 1D ranges overlap.
- * Returns the overlap amount, or 0 if no overlap.
- */
+/** Checks if two 1D ranges overlap */
 function rangeOverlap(a1: number, a2: number, b1: number, b2: number): number {
   const start = Math.max(Math.min(a1, a2), Math.min(b1, b2));
   const end = Math.min(Math.max(a1, a2), Math.max(b1, b2));
   return Math.max(0, end - start);
 }
 
-/**
- * Checks if two edges are adjacent (shared wall candidates).
- * Two edges are adjacent if:
- * - They have the same orientation
- * - Their fixed coordinate (perpendicular axis) is within tolerance
- * - They overlap along the parallel axis
- */
+/** Checks if two edges are adjacent (shared wall candidates) */
 function areEdgesAdjacent(
   e1: Edge,
   e2: Edge,
@@ -49,8 +40,6 @@ function areEdgesAdjacent(
   if (e1.orientation !== e2.orientation) return false;
   if (e1.roomId === e2.roomId) return false;
 
-  // For horizontal edges (top/bottom): fixed coord is Z, parallel is X
-  // For vertical edges (left/right): fixed coord is X, parallel is Z
   if (e1.orientation === 'horizontal') {
     const fixedDiff = Math.abs(e1.start.z - e2.start.z);
     if (fixedDiff > tolerance) return false;
@@ -66,74 +55,44 @@ function areEdgesAdjacent(
   }
 }
 
-/**
- * Extracts the 4 edges from a room's bounding box.
- */
+/** Extracts the 4 edges from a room's bounding box */
 function extractEdges(room: ParsedRoom): Edge[] {
   const { minX, maxX, minZ, maxZ } = room.bounds;
 
   return [
-    // Top edge (min Z)
-    {
-      start: { x: minX, z: minZ },
-      end: { x: maxX, z: minZ },
-      roomId: room.id,
-      side: 'top',
-      orientation: 'horizontal' as WallOrientation,
-    },
-    // Bottom edge (max Z)
-    {
-      start: { x: minX, z: maxZ },
-      end: { x: maxX, z: maxZ },
-      roomId: room.id,
-      side: 'bottom',
-      orientation: 'horizontal' as WallOrientation,
-    },
-    // Left edge (min X)
-    {
-      start: { x: minX, z: minZ },
-      end: { x: minX, z: maxZ },
-      roomId: room.id,
-      side: 'left',
-      orientation: 'vertical' as WallOrientation,
-    },
-    // Right edge (max X)
-    {
-      start: { x: maxX, z: minZ },
-      end: { x: maxX, z: maxZ },
-      roomId: room.id,
-      side: 'right',
-      orientation: 'vertical' as WallOrientation,
-    },
+    { start: { x: minX, z: minZ }, end: { x: maxX, z: minZ }, roomId: room.id, side: 'top', orientation: 'horizontal' },
+    { start: { x: minX, z: maxZ }, end: { x: maxX, z: maxZ }, roomId: room.id, side: 'bottom', orientation: 'horizontal' },
+    { start: { x: minX, z: minZ }, end: { x: minX, z: maxZ }, roomId: room.id, side: 'left', orientation: 'vertical' },
+    { start: { x: maxX, z: minZ }, end: { x: maxX, z: maxZ }, roomId: room.id, side: 'right', orientation: 'vertical' },
   ];
 }
 
-/**
- * Computes the length of a wall segment.
- */
+/** Computes the length of a wall segment */
 function segmentLength(start: Point2D, end: Point2D): number {
   const dx = end.x - start.x;
   const dz = end.z - start.z;
   return Math.sqrt(dx * dx + dz * dz);
 }
 
+const sideToDirection: Record<string, 'north' | 'south' | 'east' | 'west'> = {
+  top: 'north',
+  bottom: 'south',
+  left: 'west',
+  right: 'east'
+};
+
 /**
  * Main function: Build the wall graph from a list of parsed rooms.
- * 
- * Returns an array of WallSegment objects representing all walls
- * in the floor plan, with shared walls detected and doors placed.
  */
 export function buildWallGraph(
   rooms: ParsedRoom[],
   config: EngineConfig = DEFAULT_ENGINE_CONFIG
 ): WallSegment[] {
-  // Step 1: Extract all edges from all rooms
   const allEdges: Edge[] = [];
   for (const room of rooms) {
     allEdges.push(...extractEdges(room));
   }
 
-  // Step 2: Find adjacency pairs (shared walls)
   const adjacencyPairs: { e1: Edge; e2: Edge }[] = [];
   const matchedEdges = new Set<string>();
 
@@ -142,8 +101,6 @@ export function buildWallGraph(
       const e1 = allEdges[i];
       const e2 = allEdges[j];
 
-      // Only opposite sides can be adjacent
-      // (e.g., room A's right edge + room B's left edge)
       const areOppositeSides =
         (e1.side === 'right' && e2.side === 'left') ||
         (e1.side === 'left' && e2.side === 'right') ||
@@ -163,34 +120,21 @@ export function buildWallGraph(
   const walls: WallSegment[] = [];
   let wallId = 0;
 
-  // Step 3: Create shared (interior) walls from adjacency pairs
+  // Interior walls (shared)
   for (const { e1, e2 } of adjacencyPairs) {
-    // The shared wall is positioned at the average of the two edges
     let start: Point2D;
     let end: Point2D;
 
     if (e1.orientation === 'horizontal') {
       const avgZ = (e1.start.z + e2.start.z) / 2;
-      const startX = Math.max(
-        Math.min(e1.start.x, e1.end.x),
-        Math.min(e2.start.x, e2.end.x)
-      );
-      const endX = Math.min(
-        Math.max(e1.start.x, e1.end.x),
-        Math.max(e2.start.x, e2.end.x)
-      );
+      const startX = Math.max(Math.min(e1.start.x, e1.end.x), Math.min(e2.start.x, e2.end.x));
+      const endX = Math.min(Math.max(e1.start.x, e1.end.x), Math.max(e2.start.x, e2.end.x));
       start = { x: startX, z: avgZ };
       end = { x: endX, z: avgZ };
     } else {
       const avgX = (e1.start.x + e2.start.x) / 2;
-      const startZ = Math.max(
-        Math.min(e1.start.z, e1.end.z),
-        Math.min(e2.start.z, e2.end.z)
-      );
-      const endZ = Math.min(
-        Math.max(e1.start.z, e1.end.z),
-        Math.max(e2.start.z, e2.end.z)
-      );
+      const startZ = Math.max(Math.min(e1.start.z, e1.end.z), Math.min(e2.start.z, e2.end.z));
+      const endZ = Math.min(Math.max(e1.start.z, e1.end.z), Math.max(e2.start.z, e2.end.z));
       start = { x: avgX, z: startZ };
       end = { x: avgX, z: endZ };
     }
@@ -204,12 +148,17 @@ export function buildWallGraph(
       height: config.defaultWallHeight,
       isExterior: false,
       roomIds: [e1.roomId, e2.roomId],
+      roomSideMap: {
+        [e1.roomId]: sideToDirection[e1.side],
+        [e2.roomId]: sideToDirection[e2.side],
+      },
       doors: [],
+      windows: [],
       length: segmentLength(start, end),
     });
   }
 
-  // Step 4: Create exterior walls for unmatched edges
+  // Exterior walls
   for (const edge of allEdges) {
     const edgeKey = `${edge.roomId}-${edge.side}`;
     if (matchedEdges.has(edgeKey)) continue;
@@ -223,7 +172,11 @@ export function buildWallGraph(
       height: config.defaultWallHeight,
       isExterior: true,
       roomIds: [edge.roomId],
+      roomSideMap: {
+        [edge.roomId]: sideToDirection[edge.side]
+      },
       doors: [],
+      windows: [],
       length: segmentLength(edge.start, edge.end),
     });
   }

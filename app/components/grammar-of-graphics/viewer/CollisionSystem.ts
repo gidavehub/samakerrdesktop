@@ -1,9 +1,10 @@
 /**
- * Grammar of Shelter — Collision System
+ * Grammar of Graphics — Collision System
  * 
  * Prevents the player from walking through walls using raycasting.
  * Doors are passable (they don't have collision geometry).
  */
+
 
 import * as THREE from 'three';
 import { EngineConfig, DEFAULT_ENGINE_CONFIG } from '../types';

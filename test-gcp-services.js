@@ -62,10 +62,10 @@ async function run() {
                 }
             }
         });
-        log('…', 'SDK initialized. Sending test prompt to gemini-3-flash-preview at location=global...');
+        log('…', 'SDK initialized. Sending test prompt to gemini-3.1-pro-preview at location=global...');
 
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: 'gemini-3.1-pro-preview',
             contents: 'Reply with exactly: GEMINI_OK',
         });
 

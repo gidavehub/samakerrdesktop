@@ -296,7 +296,7 @@ export async function POST(req: Request) {
         try {
             console.log('[ORCHESTRATOR] Testing Gemini model access...');
             const testRes = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
+                model: 'gemini-3.1-pro-preview',
                 contents: [{ role: 'user', parts: [{ text: 'Reply with just the word OK.' }] }],
             });
             if (!testRes.text) {
@@ -304,7 +304,7 @@ export async function POST(req: Request) {
             }
             console.log('[ORCHESTRATOR] ✓ Gemini model is accessible');
         } catch (modelErr: any) {
-            const msg = `Gemini model 'gemini-3-flash-preview' is not accessible. Error: ${modelErr.message}`;
+            const msg = `Gemini model 'gemini-3.1-pro-preview' is not accessible. Error: ${modelErr.message}`;
             console.error(`[ORCHESTRATOR] ${msg}`);
             await updateProgress(propertyId, `AI model not available: ${modelErr.message}`, 0, true, msg);
             return NextResponse.json(
@@ -317,166 +317,147 @@ export async function POST(req: Request) {
         console.log(`[ORCHESTRATOR] ✓ All validation passed. Starting pipeline.`);
 
         // ================================================================
-        // PHASE 1: PARALLEL ROOM ANALYSIS & HERO IMAGE GENERATION
+        // PHASE 1: GLOBAL CONTEXT ANALYSIS & NO-HALLUCINATION IMAGE MAPPING
         // ================================================================
-        console.log("\n[ORCHESTRATOR] ── PHASE 1: Room Analysis & Hero Image Generation ──");
-        await updateProgress(propertyId, `Analyzing ${roomsWithPhotos.length} rooms in parallel...`, 10);
+        console.log("\n[ORCHESTRATOR] ── PHASE 1: Global Context Analysis ──");
+        await updateProgress(propertyId, `Performing global architectural analysis on ${roomsWithPhotos.length} rooms...`, 10);
 
-        let completedRooms = 0;
         const roomErrors: string[] = [];
+        let globalStructuralAnalysis: Record<string, any> = {};
+        let masterOverheadPrompt = "A hyper-realistic top-down overhead 3D floorplan render, architecture.";
 
-        const processedRooms = await Promise.all(rooms.map(async (room: any) => {
-            const roomPhotos = room.photos || [];
-
-            if (roomPhotos.length === 0) {
-                console.warn(`[ROOM: ${room.name}] ⚠ No photos — skipping AI processing`);
-                return { ...room, heroPrompt: null, heroImageUrl: null, skipped: true };
+        try {
+            console.log(`[ORCHESTRATOR] Feeding blueprint and ALL room photos to Gemini in ONE context window...`);
+            
+            // Build the massive prompt containing the blueprint and all room photos with their coordinates
+            const globalParts: any[] = [];
+            
+            // 1. Add Blueprint if available
+            if (blueprintUrl) {
+                globalParts.push({ text: "Here is the architectural blueprint of the ENTIRE property:" });
+                globalParts.push({ fileData: { fileUri: urlToGsUri(blueprintUrl), mimeType: 'image/jpeg' } });
             }
 
-            try {
-                console.log(`[ROOM: ${room.name}] Processing ${roomPhotos.length} photo(s)...`);
-
-                const photoParts = roomPhotos.map((photoUrl: string) => ({
-                    fileData: { fileUri: urlToGsUri(photoUrl), mimeType: 'image/jpeg' }
-                }));
-
-                // Step 1a: Extract detailed prompt from room photos via Gemini
-                let heroPrompt: string;
-                try {
-                    const promptExtraction = await ai.models.generateContent({
-                        model: 'gemini-3-flash-preview',
-                        contents: [{
-                            role: 'user',
-                            parts: [
-                                ...photoParts,
-                                {
-                                    text: `You are an elite, high-end architectural photographer and interior designer. Look at these ${photoParts.length} photos of a single room. Your task is to write a breathtaking, hyper-detailed prompt to recreate this EXACT room using a high-end image generator. Describe the exact wall colors, the specific flooring materials, the style and placement of the furniture, and the position of the windows and doors. Specify the lighting. The output must elevate the aesthetic to ultra-premium luxury real estate standards while remaining 100% faithful to the original layout and contents. Output ONLY the image generation prompt, nothing else.`
-                                }
-                            ]
-                        }]
-                    });
-                    heroPrompt = promptExtraction.text || `A beautiful, photorealistic render of a ${room.name}`;
-                    console.log(`[ROOM: ${room.name}] ✓ Prompt extracted (${heroPrompt.length} chars)`);
-                } catch (promptErr: any) {
-                    console.error(`[ROOM: ${room.name}] ✗ Gemini prompt extraction failed: ${promptErr.message}`);
-                    roomErrors.push(`${room.name}: Prompt extraction failed — ${promptErr.message}`);
-                    heroPrompt = `A beautiful, photorealistic render of a ${room.name}, luxury interior design, cinematic lighting, 8K`;
+            // 2. Add each room's photo along with its bounding box coordinates
+            globalParts.push({ text: "\n\nBelow are the real photographs of the individual rooms, mapped to their specific bounding box coordinates on the blueprint. USE THESE EXACT PHOTOS to determine the textures, colors, and layout." });
+            
+            for (const room of roomsWithPhotos) {
+                const roomPhotos = room.photos || [];
+                globalParts.push({ 
+                    text: `\n--- ROOM: ${room.name} (ID: ${room.id}) ---\nPosition on blueprint: x=${room.boundingBox.x}%, y=${room.boundingBox.y}%, width=${room.boundingBox.width}%, height=${room.boundingBox.height}%\nPhotos of this exact space:` 
+                });
+                for (const photoUrl of roomPhotos) {
+                     globalParts.push({ fileData: { fileUri: urlToGsUri(photoUrl), mimeType: 'image/jpeg' } });
                 }
-
-                // Step 1b: Generate hero image with Imagen 3
-                let heroUrl: string | null = null;
-                try {
-                    console.log(`[ROOM: ${room.name}] Generating hero image with Imagen 3...`);
-                    const heroImageRes = await ai.models.generateImages({
-                        model: 'imagen-3.0-generate-002',
-                        prompt: heroPrompt,
-                        config: { numberOfImages: 1, aspectRatio: '16:9', outputMimeType: 'image/jpeg' }
-                    });
-
-                    const base64Hero = heroImageRes.generatedImages?.[0]?.image?.imageBytes;
-                    if (!base64Hero) {
-                        throw new Error('Imagen 3 returned no image data — prompt may have been rejected by safety filters');
-                    }
-
-                    heroUrl = await uploadBase64ToStorage(base64Hero, propertyId, `hero_${room.id}_${Date.now()}.jpg`);
-                    console.log(`[ROOM: ${room.name}] ✓ Hero image generated and uploaded`);
-                } catch (imgErr: any) {
-                    console.error(`[ROOM: ${room.name}] ✗ Imagen 3 generation failed: ${imgErr.message}`);
-                    roomErrors.push(`${room.name}: Image generation failed — ${imgErr.message}`);
-                }
-
-                completedRooms++;
-                const progressPct = 10 + Math.floor((completedRooms / roomsWithPhotos.length) * 40);
-                await updateProgress(propertyId, `Generated ${completedRooms}/${roomsWithPhotos.length} room layouts...`, progressPct);
-
-                return { ...room, heroPrompt, heroImageUrl: heroUrl };
-
-            } catch (roomErr: any) {
-                console.error(`[ROOM: ${room.name}] ✗ Unexpected error: ${roomErr.message}`);
-                roomErrors.push(`${room.name}: Unexpected — ${roomErr.message}`);
-                completedRooms++;
-                return { ...room, heroPrompt: null, heroImageUrl: null, error: roomErr.message };
             }
-        }));
 
-        const successfulHeroes = processedRooms.filter(r => r.heroImageUrl);
+            // 3. Add the strict instruction set
+            globalParts.push({
+                text: `\n\nYou are an elite architectural reproduction AI. Look at the FULL context: the blueprint AND all the photos provided together.
+
+YOUR TASKS:
+1. "masterOverheadPrompt": Generate an extremely precise, hyper-detailed prompt for an image generator (like Imagen 3) to create a single photorealistic top-down 3D overhead view of this ENTIRE property.
+   - Describe the global layout exactly as seen in the blueprint.
+   - Describe the interior textures and colors exactly as seen in the room photos.
+   - DO NOT hallucinate. Transfer objects the exact way they are.
+   - CRITICAL: The angle MUST be completely straight down (overhead orthographic) on a solid black background.
+
+2. "structuralAnalysis": Return a JSON mapping of EVERY room ID to its structural data.
+   For each room, cross-reference its bounding box on the blueprint with its actual photos.
+   - "wallColor": (hex code)
+   - "floorMaterial": ("wood" | "tile" | "carpet" | "concrete" | "marble" | "laminate" | "unknown")
+   - "floorColor": (hex code)
+   - "doors": Look at the BLUEPRINT for this room's coordinates and the PHOTOS. Output an array of objects: { "wall": "north"|"south"|"east"|"west", "position": 0.0-1.0, "type": "single"|"double"|"sliding", "color": "hex" }. CRITICAL RULE: DO NOT HALLUCINATE DOORS. Only output doors you definitively see in the blueprint or photo. If none, return [].
+   - "windows": Look at the BLUEPRINT and PHOTOS. Output an array of objects: { "wall": "north"|"south"|"east"|"west", "position": 0.0-1.0, "width": meters, "height": meters, "sillHeight": meters, "type": "single", "color": "hex" }. CRITICAL RULE: DO NOT HALLUCINATE WINDOWS. If you do not see a window symbol in the blueprint for this room, or a window in the photo, return [].
+   - "furniture": array of objects with "type" and "position" {x(0-1), z(0-1)}
+
+Output MUST be strictly formatted JSON with the following structure, with NO markdown formatting, NO \`\`\`json wrappers:
+{
+  "masterOverheadPrompt": "...",
+  "structuralAnalysis": {
+     "room_1": { "wallColor": "...", "floorMaterial": "...", ... },
+     "room_2": { ... }
+  }
+}`
+            });
+
+            const globalExtraction = await ai.models.generateContent({
+                model: 'gemini-3.1-pro-preview',
+                contents: [{ role: 'user', parts: globalParts }]
+            });
+
+            let rawText = globalExtraction.text || '{}';
+            rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            const parsed = JSON.parse(rawText);
+            globalStructuralAnalysis = parsed.structuralAnalysis || {};
+            masterOverheadPrompt = parsed.masterOverheadPrompt || masterOverheadPrompt;
+
+            console.log(`[ORCHESTRATOR] ✓ Global context extracted successfully`);
+        } catch (globalErr: any) {
+            console.error(`[ORCHESTRATOR] ✗ Global Gemini extraction failed: ${globalErr.message}`);
+            roomErrors.push(`Global Analysis Failed — ${globalErr.message}`);
+        }
+
+        // Apply real photos and structural data directly back to the rooms (NO hallucinated hero images)
+        const processedRooms = rooms.map((room: any) => {
+            if (!room.photos || room.photos.length === 0) {
+                return { ...room, heroImageUrls: [], structuralAnalysis: null, skipped: true };
+            }
+
+            // USE THE ACTUAL PHOTOS INSTEAD OF HALLUCINATING NEW ONES WITH IMAGEN 3
+            // "I want you to transfer all objects the exact way they are... just use the original images"
+            const heroUrls = [...room.photos];
+            const structuralAnalysis = globalStructuralAnalysis[room.id] || null;
+
+            return { 
+                ...room, 
+                heroPrompt: "Direct photo mapping (No Hallucination)", 
+                heroImageUrls: heroUrls, 
+                structuralAnalysis 
+            };
+        });
+
+        const successfulHeroes = processedRooms.filter(r => r.heroImageUrls && r.heroImageUrls.length > 0);
         if (successfulHeroes.length === 0) {
-            const msg = `All room image generations failed. Errors: ${roomErrors.join('; ')}`;
+            const msg = `No actual room photos found to process. Errors: ${roomErrors.join('; ')}`;
             console.error(`[ORCHESTRATOR] ${msg}`);
             await updateProgress(propertyId, msg, 0, true, JSON.stringify(roomErrors));
             return NextResponse.json({ error: msg, roomErrors }, { status: 500 });
         }
 
-        console.log(`[ORCHESTRATOR] Phase 1 complete: ${successfulHeroes.length}/${rooms.length} rooms generated`);
+        console.log(`[ORCHESTRATOR] Phase 1 complete: ${successfulHeroes.length}/${rooms.length} rooms mapped to exact original photos`);
 
         // ================================================================
-        // PHASE 2: 2.5D ISOMETRIC ASSEMBLY
+        // PHASE 2: PHOTOREALISTIC OVERHEAD ASSEMBLY
         // ================================================================
-        console.log("\n[ORCHESTRATOR] ── PHASE 2: 2.5D Isometric Floorplan Assembly ──");
-        await updateProgress(propertyId, "Constructing master 2.5D architectural floorplan...", 55);
+        console.log("\n[ORCHESTRATOR] ── PHASE 2: Photorealistic Overhead Floorplan ──");
+        await updateProgress(propertyId, "Constructing master photorealistic overhead view...", 55);
 
-        let final25DUrl: string | null = null;
+        let finalOverheadUrl: string | null = null;
 
         try {
-            const heroImageParts = successfulHeroes.map((room) => ({
-                fileData: { fileUri: urlToGsUri(room.heroImageUrl!), mimeType: 'image/jpeg' }
-            }));
+            await updateProgress(propertyId, "Rendering final photorealistic overhead view via Imagen 3...", 65);
 
-            const contentParts: any[] = [...heroImageParts];
-
-            if (blueprintUrl) {
-                contentParts.unshift({
-                    fileData: { fileUri: urlToGsUri(blueprintUrl), mimeType: 'image/jpeg' }
-                });
-            }
-
-            let masterInstruction = `You are a world-class 3D architectural visualizer. `;
-            if (blueprintUrl) {
-                masterInstruction += `I am providing you with the 2D architectural blueprint of a home, followed by ${heroImageParts.length} pristine hero images representing each individual room.\n\n`;
-            } else {
-                masterInstruction += `I am providing you with ${heroImageParts.length} pristine hero images representing each room of a property.\n\n`;
-            }
-            masterInstruction += `Write a highly meticulous image generation prompt to create a breathtaking '2.5D Isometric Dollhouse Floorplan Render' of this entire property.\n`;
-            masterInstruction += `The prompt MUST instruct the image generator to maintain the exact structural wall layout, rendering it from a slightly angled, top-down isometric 3D perspective with the roof removed.\n`;
-            masterInstruction += `Then, explicitly list the interior design details for each room based on the provided photos:\n`;
-
-            successfulHeroes.forEach(room => {
-                if (room.heroPrompt) {
-                    masterInstruction += `- For the ${room.name}: include ${room.heroPrompt.substring(0, 100)}...\n`;
-                }
-            });
-            masterInstruction += `\nEnsure the final prompt requests soft volumetric global illumination, hyper-realistic textures, and high-end Unreal Engine 5 aesthetic quality. Output ONLY the master prompt.`;
-
-            console.log('[ORCHESTRATOR] Extracting master 2.5D prompt via Gemini...');
-            const masterPromptExtraction = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: [{ role: 'user', parts: [...contentParts, { text: masterInstruction }] }]
-            });
-
-            const masterPrompt = masterPromptExtraction.text || "A hyper-realistic 2.5D isometric 3D floorplan render, top-down angled view, luxury architecture.";
-            console.log(`[ORCHESTRATOR] ✓ Master prompt extracted (${masterPrompt.length} chars)`);
-
-            await updateProgress(propertyId, "Rendering final 2.5D masterpiece via Imagen 3...", 65);
-
-            console.log('[ORCHESTRATOR] Generating 2.5D isometric image...');
+            console.log(`[ORCHESTRATOR] Generating overhead image using contextually aware prompt: ${masterOverheadPrompt.substring(0, 100)}...`);
             const isometricRes = await ai.models.generateImages({
                 model: 'imagen-3.0-generate-002',
-                prompt: masterPrompt,
+                prompt: masterOverheadPrompt,
                 config: { numberOfImages: 1, aspectRatio: '16:9', outputMimeType: 'image/jpeg' }
             });
 
             const base64Isometric = isometricRes.generatedImages?.[0]?.image?.imageBytes;
             if (!base64Isometric) {
-                throw new Error("Imagen 3 returned no image data for 2.5D render. Prompt may have been rejected by safety filters.");
+                throw new Error("Imagen 3 returned no image data for overhead render. Prompt may have been rejected by safety filters.");
             }
 
-            final25DUrl = await uploadBase64ToStorage(base64Isometric, propertyId, `isometric_2_5d_${Date.now()}.jpg`);
-            console.log("[ORCHESTRATOR] ✓ 2.5D Isometric Floorplan Generated and uploaded.");
+            finalOverheadUrl = await uploadBase64ToStorage(base64Isometric, propertyId, `overhead_view_${Date.now()}.jpg`);
+            console.log("[ORCHESTRATOR] ✓ Photorealistic Overhead Floorplan Generated and uploaded.");
 
         } catch (phase2Err: any) {
             console.error(`[ORCHESTRATOR] ✗ Phase 2 failed: ${phase2Err.message}`);
             console.error(phase2Err.stack);
-            await updateProgress(propertyId, `2.5D generation failed: ${phase2Err.message}. Continuing with video...`, 75);
+            await updateProgress(propertyId, `Overhead generation failed: ${phase2Err.message}. Continuing with video...`, 75);
         }
 
         // ================================================================
@@ -486,11 +467,14 @@ export async function POST(req: Request) {
         await updateProgress(propertyId, "Compiling cinematic virtual tour video...", 80);
 
         let videoUrl: string | null = null;
+        let videoErrorMsg: string | undefined = undefined;
 
         try {
+            // Flatten all hero images from all rooms
+            const allHeroImages = successfulHeroes.flatMap(r => r.heroImageUrls);
             const allImageUrls = [
-                ...successfulHeroes.map(r => r.heroImageUrl!),
-                ...(final25DUrl ? [final25DUrl] : [])
+                ...allHeroImages,
+                ...(finalOverheadUrl ? [finalOverheadUrl] : [])
             ];
 
             if (allImageUrls.length === 0) {
@@ -520,6 +504,7 @@ export async function POST(req: Request) {
 
         } catch (videoError: any) {
             console.error(`[ORCHESTRATOR] ✗ Phase 3 (Video) failed: ${videoError.message}`);
+            videoErrorMsg = videoError.message;
             await updateProgress(propertyId, `Video generation skipped: ${videoError.message}`, 95);
         }
 
@@ -532,21 +517,22 @@ export async function POST(req: Request) {
         const summary = {
             success: true,
             rooms: processedRooms,
-            isometric25DUrl: final25DUrl,
+            overheadImageUrl: finalOverheadUrl,
             videoUrl: videoUrl,
             stats: {
                 totalRooms: rooms.length,
                 roomsWithPhotos: roomsWithPhotos.length,
-                heroImagesGenerated: successfulHeroes.length,
-                isometricGenerated: !!final25DUrl,
+                heroImagesGenerated: successfulHeroes.length * 1, // Each room has 1 now
+                overheadGenerated: !!finalOverheadUrl,
                 videoGenerated: !!videoUrl,
+                videoError: videoErrorMsg,
                 warnings: roomErrors.length > 0 ? roomErrors : undefined,
             }
         };
 
         console.log(`\n${'='.repeat(60)}`);
         console.log(`[ORCHESTRATOR] ✓ PIPELINE COMPLETE`);
-        console.log(`[ORCHESTRATOR] Heroes: ${successfulHeroes.length}/${rooms.length} | 2.5D: ${!!final25DUrl} | Video: ${!!videoUrl}`);
+        console.log(`[ORCHESTRATOR] Heroes: ${successfulHeroes.length * 1} | Overhead: ${!!finalOverheadUrl} | Video: ${!!videoUrl}`);
         if (roomErrors.length > 0) console.log(`[ORCHESTRATOR] Warnings: ${roomErrors.length}`);
         console.log(`${'='.repeat(60)}\n`);
 

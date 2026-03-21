@@ -17,9 +17,9 @@ import gsap from 'gsap';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 
-// Grammar of Shelter Engine — dynamically imported (uses Three.js which needs browser)
+// Grammar of Graphics Engine — dynamically imported (uses Three.js which needs browser)
 const FirstPersonViewer = dynamic(
-    () => import('../../../components/grammar-of-shelter/viewer/FirstPersonViewer'),
+    () => import('../../../components/grammar-of-graphics/viewer/FirstPersonViewer'),
     { ssr: false, loading: () => <div className="w-full h-full bg-[#1a1a1a] flex items-center justify-center"><div className="w-8 h-8 border-[3px] border-white/20 border-t-white rounded-full animate-spin" /></div> }
 );
 
@@ -39,7 +39,7 @@ interface PropertyData {
     constructionProgress?: number;
     blueprintUrl?: string;
     rooms?: any[];
-    isometric25DUrl?: string;
+    overheadImageUrl?: string;
     videoUrl?: string;
 }
 
@@ -156,7 +156,7 @@ function PropertyEditorContent() {
     const [images, setImages] = useState<string[]>([]);
     const [progress, setProgress] = useState(0);
     const [completionState, setCompletionState] = useState<string>('planning');
-    const [imagesPerRoom, setImagesPerRoom] = useState(3);
+    const [imagesPerRoom, setImagesPerRoom] = useState(1);
     const [videoLength, setVideoLength] = useState(30);
 
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -174,7 +174,7 @@ function PropertyEditorContent() {
     const [orchestratorError, setOrchestratorError] = useState<string | null>(null);
     const [orchestratorTrigger, setOrchestratorTrigger] = useState<number>(0); // Timestamp from mobile
 
-    const [isometric25DUrl, setIsometric25DUrl] = useState<string | null>(null);
+    const [overheadImageUrl, setOverheadImageUrl] = useState<string | null>(null);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
     const blueprintInputRef = useRef<HTMLInputElement>(null);
@@ -221,7 +221,8 @@ function PropertyEditorContent() {
                         setBlueprintUrl(data.blueprintUrl || null);
                         setRooms(data.rooms || []);
 
-                        if (data.isometric25DUrl) setIsometric25DUrl(data.isometric25DUrl);
+                        if (data.overheadImageUrl) setOverheadImageUrl(data.overheadImageUrl);
+                        else if (data.isometric25DUrl) setOverheadImageUrl(data.isometric25DUrl); // Fallback for old data
                         if (data.videoUrl) setVideoUrl(data.videoUrl);
                     }
                     setLoading(false);
@@ -333,13 +334,13 @@ function PropertyEditorContent() {
             }
 
             const data = await res.json();
-            setIsometric25DUrl(data.isometric25DUrl);
+            setOverheadImageUrl(data.overheadImageUrl);
             if (data.videoUrl) setVideoUrl(data.videoUrl);
             setRooms(data.rooms);
 
             await updateDoc(doc(db, 'properties', propertyId), {
                 rooms: data.rooms,
-                isometric25DUrl: data.isometric25DUrl,
+                overheadImageUrl: data.overheadImageUrl,
                 ...(data.videoUrl && { videoUrl: data.videoUrl })
             });
             
@@ -397,7 +398,7 @@ function PropertyEditorContent() {
                     if (res.ok) {
                         const data = await res.json();
                         setRooms(data.rooms || []);
-                        setIsometric25DUrl(null);
+                        setOverheadImageUrl(null);
                         setVideoUrl(null);
                         setIsOrchestrating(false);
                         
@@ -405,7 +406,7 @@ function PropertyEditorContent() {
                         await updateDoc(doc(db, 'properties', propertyId), {
                             blueprintUrl: downloadUrl,
                             rooms: data.rooms || [],
-                            isometric25DUrl: null,
+                            overheadImageUrl: null,
                             videoUrl: null
                         });
                         
@@ -712,7 +713,7 @@ function PropertyEditorContent() {
                                 <h2 className="text-[18px] font-bold text-[#1b1b1b] mb-1">Property Preview</h2>
                                 <p className="text-[13px] text-[#605e5c]">2.5D interactive floorplans, cinematic videos, and enhanced photography.</p>
                             </div>
-                            {(isometric25DUrl || videoUrl || rooms.some(r => r.heroImageUrl)) && (
+                            {(overheadImageUrl || videoUrl || rooms.some(r => r.heroImageUrls?.length > 0 || r.heroImageUrl)) && (
                                 <button
                                     onClick={handleOrchestrate}
                                     disabled={isOrchestrating || !blueprintUrl || rooms.length === 0 || !rooms[0].photos}
@@ -723,7 +724,7 @@ function PropertyEditorContent() {
                             )}
                         </div>
 
-                        {(!isometric25DUrl && !videoUrl && !rooms.some(r => r.heroImageUrl) && !isOrchestrating) ? (
+                        {(!overheadImageUrl && !videoUrl && !rooms.some(r => r.heroImageUrls?.length > 0 || r.heroImageUrl) && !isOrchestrating) ? (
                             orchestratorTrigger > 0 ? (
                                 <div className="bg-[#f3f9fd] border border-[#0067b8]/30 shadow-[0_4px_16px_rgba(10,88,202,0.08)] p-10 flex flex-col items-center gap-4 rounded-xl">
                                     <div className="w-16 h-16 bg-[#0067b8] text-white rounded-full flex items-center justify-center shadow-md animate-bounce">
@@ -752,33 +753,57 @@ function PropertyEditorContent() {
                                 <div className="absolute right-0 top-0 w-48 h-48 bg-[#0067b8] opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
                                 
                                 {/* 1. Enhanced Pictures Box */}
-                                {rooms.some(r => r.heroImageUrl) && (
+                                {rooms.some(r => r.heroImageUrls?.length > 0 || r.heroImageUrl) && (
                                     <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
                                         <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
                                             <ImageIcon size={18} className="text-[#0A58CA]" /> 
                                             Enhanced Room Photography
                                         </h3>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                            {rooms.filter(r => r.heroImageUrl).map((room, i) => (
-                                                <div key={i} className="group relative aspect-[4/3] bg-[#f3f2f1] overflow-hidden border border-[#e1dfdd]">
-                                                    <img src={room.heroImageUrl} alt={room.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
-                                                        <p className="text-white text-[12px] font-semibold truncate">{room.name}</p>
+                                        <div className="space-y-8">
+                                            {rooms.filter(r => r.heroImageUrls?.length > 0 || r.heroImageUrl).map((room, i) => {
+                                                const roomImages = room.heroImageUrls || (room.heroImageUrl ? [room.heroImageUrl] : []);
+                                                return (
+                                                    <div key={i} className="border-b border-[#e1dfdd] pb-6 last:border-0 last:pb-0">
+                                                        <h4 className="text-[14px] font-bold text-[#1b1b1b] mb-3">{room.name}</h4>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                                            {roomImages.map((url: string, imgIdx: number) => (
+                                                                <div key={imgIdx} className="group relative aspect-[4/3] bg-[#f3f2f1] overflow-hidden border border-[#e1dfdd]">
+                                                                    <img src={url} alt={`${room.name} view ${imgIdx + 1}`} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
 
-                                {/* 2. Cinematic Video Box */}
+                                {/* 2. Photorealistic Overhead View */}
+                                {overheadImageUrl && (
+                                    <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                                        <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
+                                            <Cuboid size={18} className="text-[#0A58CA]" /> 
+                                            Photorealistic Top-Down Overhead
+                                        </h3>
+                                        <div className="w-full relative aspect-[16/9] bg-[#f3f2f1] border border-[#e1dfdd] overflow-hidden rounded group">
+                                            <img 
+                                                src={overheadImageUrl} 
+                                                alt="Property Overhead View" 
+                                                className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 3. Cinematic Video Box */}
                                 {videoUrl && (
                                     <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
                                         <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
                                             <Wand2 size={18} className="text-[#0A58CA]" /> 
                                             Cinematic Property Tour (Video)
                                         </h3>
-                                        <div className="w-full aspect-[16/9] bg-black border border-[#e1dfdd] overflow-hidden relative">
+                                        <div className="w-full aspect-[16/9] bg-black border border-[#e1dfdd] overflow-hidden relative rounded">
                                             <video 
                                                 src={videoUrl} 
                                                 controls 
@@ -791,14 +816,14 @@ function PropertyEditorContent() {
                                     </div>
                                 )}
 
-                                {/* 3. Grammar of Shelter — 3D Walkthrough */}
+                                {/* 4. Grammar of Graphics — 3D Walkthrough */}
                                 {rooms.length > 0 && (
                                     <div className="relative z-10 bg-white border border-[#e1dfdd] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
                                         <h3 className="text-[16px] font-semibold text-[#1b1b1b] mb-4 flex items-center gap-2">
                                             <Cuboid size={18} className="text-[#0A58CA]" /> 
-                                            3D Walkthrough — Grammar of Shelter Engine
+                                            3D Walkthrough — Grammar of Graphics Engine
                                         </h3>
-                                        <div className="w-full aspect-[16/9] overflow-hidden relative rounded-lg">
+                                        <div className="w-full aspect-[16/9] overflow-hidden relative rounded-lg border border-[#e1dfdd]">
                                             <FirstPersonViewer
                                                 rooms={rooms}
                                                 className="w-full h-full"
@@ -914,7 +939,7 @@ function PropertyEditorContent() {
                                     setOrchestratorStep(null);
                                     setOrchestratorProgress(0);
                                     setOrchestratorError(null);
-                                    setIsometric25DUrl(null);
+                                    setOverheadImageUrl(null);
                                     setVideoUrl(null);
                                     setBlueprintUrl(null);
                                     setRooms([]);
@@ -934,7 +959,7 @@ function PropertyEditorContent() {
                                                 blueprintUrl: null,
                                                 rooms: [],
                                                 images: [], // wipe raw images from firestore too
-                                                isometric25DUrl: null,
+                                                overheadImageUrl: null,
                                                 videoUrl: null
                                             });
 
